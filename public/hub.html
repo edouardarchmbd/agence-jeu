@@ -35,7 +35,8 @@
       const joinLinkEl = document.getElementById("join-link");
       const logEl = document.getElementById("log");
 
-      const ws = new WebSocket(`ws://${window.location.host}`);
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
 
       function log(message) {
         const line = `[${new Date().toLocaleTimeString()}] ${message}`;
