@@ -892,6 +892,13 @@
   /* Hub epure: le panel d'actions est retire de l'UI */
   .game-body { grid-template-columns: 1fr !important; }
   .side-panel { display: none !important; }
+  #game .btn,
+  #modal-actions .btn,
+  #modal-body button,
+  #tab-action button {
+    pointer-events: none !important;
+    opacity: 0.65;
+  }
 
 </style>
 </head>
@@ -3086,7 +3093,12 @@ const lobbyByClientId = new Map();
 const lobbyJoinOrder = [];
 let gameStartedFromHub = false;
 let latestActionsByPlayerId = new Map();
-const startupState = { active: false, currentIdx: null, doneByPlayerId: {} };
+const startupState = {
+  active: false,
+  doneByPlayerId: {},
+  tsRevealedByPlayerId: {},
+  cvsRevealedByPlayerId: {}
+};
 
 function hubSend(payload) {
   if (hubSocket.readyState === WebSocket.OPEN) hubSocket.send(JSON.stringify(payload));
@@ -3123,13 +3135,21 @@ function computeForcesByCategory(player) {
     if (!cv || !cv.category) return;
     totals[cv.category] = (totals[cv.category] || 0) + (cv.bonus || 0);
   });
+  const spec = player.specialisation;
+  if (spec && spec.category) {
+    totals[spec.category] = (totals[spec.category] || 0) + (spec.bonus || 0);
+  }
   return totals;
 }
 
 function extractCurrentActions() {
-  const actionArea = document.getElementById('action-area');
-  if (!actionArea) return [];
-  const buttons = Array.from(actionArea.querySelectorAll('button[onclick]'));
+  const selectors = [
+    '#action-area button[onclick]',
+    '#modal-actions button[onclick]',
+    '#modal-body button[onclick]'
+  ];
+  const buttons = Array.from(document.querySelectorAll(selectors.join(',')))
+    .filter((btn) => btn.offsetParent !== null);
   return buttons.map((btn, idx) => ({
     id: `a-${idx}`,
     label: (btn.textContent || 'Action').trim(),
@@ -3173,8 +3193,10 @@ function syncPhonesWithGame() {
       gameStarted: true,
       startup: {
         active: startupState.active,
-        isCurrent: startupState.currentIdx === phone.playerId,
         isDone: Boolean(startupState.doneByPlayerId[phone.playerId]),
+        tsRevealed: Boolean(startupState.tsRevealedByPlayerId[phone.playerId]),
+        cvsRevealed: Boolean(startupState.cvsRevealedByPlayerId[phone.playerId]),
+        canRoll: Boolean(startupState.tsRevealedByPlayerId[phone.playerId] && startupState.cvsRevealedByPlayerId[phone.playerId]),
         waitingCount: Object.values(startupState.doneByPlayerId).filter(Boolean).length,
         totalCount: G.players.length,
         startRoll: player.startRoll || null
@@ -3198,9 +3220,12 @@ function syncPhonesWithGame() {
 }
 
 function completeStartupRoll(clientId) {
-  if (!startupState.active || startupState.currentIdx === null) return;
+  if (!startupState.active) return;
   const playerInfo = lobbyByClientId.get(clientId);
-  if (!playerInfo || playerInfo.playerId !== startupState.currentIdx) return;
+  if (!playerInfo) return;
+  if (startupState.doneByPlayerId[playerInfo.playerId]) return;
+  if (!startupState.tsRevealedByPlayerId[playerInfo.playerId]) return;
+  if (!startupState.cvsRevealedByPlayerId[playerInfo.playerId]) return;
 
   const p = G.players[playerInfo.playerId];
   if (!p) return;
@@ -3217,10 +3242,31 @@ function completeStartupRoll(clientId) {
     capital
   });
 
-  rollCapitalForPlayer(playerInfo.playerId + 1);
+  const doneCount = Object.values(startupState.doneByPlayerId).filter(Boolean).length;
+  if (doneCount >= G.players.length) {
+    rollCapitalForPlayer(G.players.length);
+  } else {
+    syncPhonesWithGame();
+  }
 }
 
 function handlePlayerAction(payload) {
+  if (payload.action === 'startup_reveal_ts') {
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || startupState.doneByPlayerId[playerInfo.playerId]) return;
+    startupState.tsRevealedByPlayerId[playerInfo.playerId] = true;
+    syncPhonesWithGame();
+    return;
+  }
+
+  if (payload.action === 'startup_reveal_cvs') {
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || startupState.doneByPlayerId[playerInfo.playerId]) return;
+    startupState.cvsRevealedByPlayerId[playerInfo.playerId] = true;
+    syncPhonesWithGame();
+    return;
+  }
+
   if (payload.action === 'startup_roll') {
     completeStartupRoll(payload.clientId);
     return;
@@ -3245,7 +3291,6 @@ function handlePlayerAction(payload) {
 function rollCapitalForPlayer(idx) {
   if (idx >= G.players.length) {
     startupState.active = false;
-    startupState.currentIdx = null;
     G.players.forEach((p) => {
       addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> démarre avec <span class="log-amount gain">${fmt(p.capital)}</span> (dé : ${p.startRoll})`);
     });
@@ -3254,7 +3299,6 @@ function rollCapitalForPlayer(idx) {
   }
 
   startupState.active = true;
-  startupState.currentIdx = idx;
   syncPhonesWithGame();
 }
 
@@ -3298,8 +3342,9 @@ startGame = function startGameFromPhones() {
     lobbyByClientId.set(p.clientId, p);
   });
   startupState.active = true;
-  startupState.currentIdx = 0;
   startupState.doneByPlayerId = {};
+  startupState.tsRevealedByPlayerId = {};
+  startupState.cvsRevealedByPlayerId = {};
   gameStartedFromHub = true;
   _startGame();
   syncPhonesWithGame();
@@ -3317,8 +3362,9 @@ restartGame = function restartGameAndLobby() {
   gameStartedFromHub = false;
   latestActionsByPlayerId = new Map();
   startupState.active = false;
-  startupState.currentIdx = null;
   startupState.doneByPlayerId = {};
+  startupState.tsRevealedByPlayerId = {};
+  startupState.cvsRevealedByPlayerId = {};
   lobbyByClientId.forEach((p) => { p.playerId = null; });
   renderLobbyFromPhones();
 };

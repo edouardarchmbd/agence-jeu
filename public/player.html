@@ -122,6 +122,10 @@
         <div class="label">Tirage de départ (secret)</div>
         <h2 id="startupTitle" style="margin:8px 0 10px">En attente...</h2>
         <div id="startupContent"></div>
+        <div class="row" style="margin-top:10px">
+          <button id="revealTopSecretBtn" class="secondary">🔓 Révéler Top Secret</button>
+          <button id="revealCVsBtn" class="secondary">👤 Révéler mes CVs</button>
+        </div>
         <button id="startupRollBtn" class="hidden" style="margin-top:10px">🎲 Lancer mon dé de départ</button>
       </div>
 
@@ -146,6 +150,12 @@
         <div class="label">Tes CVs</div>
         <div id="cvs"></div>
       </div>
+
+      <div id="topSecretCard" class="card hidden">
+        <div class="label">Ma carte Top Secret</div>
+        <div id="topSecretName" style="font-family:'Bebas Neue',sans-serif;font-size:34px;color:var(--orange);margin-top:6px">-</div>
+        <div id="topSecretText" class="meta" style="margin-top:6px"></div>
+      </div>
     </div>
 
     <script>
@@ -162,10 +172,15 @@
       const startupCard = document.getElementById("startupCard");
       const startupTitle = document.getElementById("startupTitle");
       const startupContent = document.getElementById("startupContent");
+      const revealTopSecretBtn = document.getElementById("revealTopSecretBtn");
+      const revealCVsBtn = document.getElementById("revealCVsBtn");
       const startupRollBtn = document.getElementById("startupRollBtn");
       const gameCard = document.getElementById("gameCard");
       const actionsCard = document.getElementById("actionsCard");
       const cvsCard = document.getElementById("cvsCard");
+      const topSecretCard = document.getElementById("topSecretCard");
+      const topSecretNameEl = document.getElementById("topSecretName");
+      const topSecretTextEl = document.getElementById("topSecretText");
       const agencyNameEl = document.getElementById("agencyName");
       const capitalEl = document.getElementById("capital");
       const chargesEl = document.getElementById("charges");
@@ -210,18 +225,21 @@
           </div>
         `).join("");
 
-        startupTitle.textContent = startup.isCurrent
-          ? "C'est ton tirage de départ"
-          : "Un autre joueur fait son tirage";
+        startupTitle.textContent = startup.isDone
+          ? "Tirage validé"
+          : "Fais ton tirage de départ";
         startupContent.innerHTML = `
           <div class="meta">Spécialisation: <b>${privateState.specialisation?.name || "-"}</b></div>
-          <div class="meta">Top Secret: <b>${privateState.topSecret?.name || "-"}</b></div>
+          <div class="meta">Top Secret: <b>${startup.tsRevealed ? (privateState.topSecret?.name || "-") : "Non révélé"}</b></div>
           <div class="meta" style="margin-top:8px">CVs de départ :</div>
-          ${cvRows || "<div class='meta'>Aucun CV.</div>"}
+          ${startup.cvsRevealed ? (cvRows || "<div class='meta'>Aucun CV.</div>") : "<div class='meta'>Clique sur \"Révéler mes CVs\"</div>"}
           <div class="meta" style="margin-top:10px">Progression: ${startup.waitingCount || 0}/${startup.totalCount || 0}</div>
         `;
 
-        startupRollBtn.classList.toggle("hidden", !startup.isCurrent || startup.isDone);
+        revealTopSecretBtn.disabled = startup.tsRevealed || startup.isDone;
+        revealCVsBtn.disabled = startup.cvsRevealed || startup.isDone;
+        startupRollBtn.classList.toggle("hidden", startup.isDone || !startup.canRoll);
+        startupRollBtn.disabled = startup.isDone || !startup.canRoll;
       }
 
       function renderGame(privateState) {
@@ -232,10 +250,13 @@
         gameCard.classList.remove("hidden");
         actionsCard.classList.remove("hidden");
         cvsCard.classList.remove("hidden");
+        topSecretCard.classList.remove("hidden");
 
         agencyNameEl.textContent = privateState.playerName || "-";
         capitalEl.textContent = fmtEuro(privateState.capital || 0);
         chargesEl.textContent = fmtEuro(privateState.chargesPerTurn || 0);
+        topSecretNameEl.textContent = privateState.topSecret?.name || "-";
+        topSecretTextEl.textContent = privateState.topSecret?.text || "Aucune description.";
 
         const forces = privateState.forcesByCategory || {};
         const currentCategory = privateState.specialisation?.category || "";
@@ -279,6 +300,12 @@
       }
 
       joinBtn.addEventListener("click", joinRoom);
+      revealTopSecretBtn.addEventListener("click", () => {
+        send({ type: "player_action", clientId, action: "startup_reveal_ts" });
+      });
+      revealCVsBtn.addEventListener("click", () => {
+        send({ type: "player_action", clientId, action: "startup_reveal_cvs" });
+      });
       startupRollBtn.addEventListener("click", () => {
         send({ type: "player_action", clientId, action: "startup_roll" });
         startupRollBtn.disabled = true;
