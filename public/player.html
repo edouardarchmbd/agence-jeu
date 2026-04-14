@@ -5,52 +5,146 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Agence - Joueur</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; background: #101425; color: #e6ebff; }
-      .wrap { max-width: 760px; margin: 0 auto; padding: 18px; }
-      .card { background: #1a2036; border: 1px solid #2a3456; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
-      input, button { font: inherit; border-radius: 8px; border: 1px solid #364266; padding: 10px 12px; }
-      input { background: #11172b; color: #fff; }
-      button { background: #e8834a; color: #fff; border: none; cursor: pointer; }
-      button.secondary { background: #334265; }
-      .row { display: flex; gap: 8px; flex-wrap: wrap; }
-      #actions button { margin: 6px 6px 0 0; }
-      .muted { color: #99a4cc; font-size: 13px; }
-      ul { margin: 8px 0 0 18px; padding: 0; }
+      @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap');
+
+      :root {
+        --orange: #e8834a;
+        --green: #4caf7d;
+        --blue: #3a7bd5;
+        --bg: #0f0f1a;
+        --bg2: #17172a;
+        --card: #23233a;
+        --card2: #2b2b47;
+        --text: #e8e8f0;
+        --text2: #9c9cb6;
+        --border: #32324a;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: 'DM Sans', sans-serif;
+        background: radial-gradient(ellipse at top, rgba(58,123,213,0.2), transparent 50%), var(--bg);
+        color: var(--text);
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 14px; }
+      .logo {
+        font-family: 'Bebas Neue', sans-serif;
+        color: var(--orange);
+        font-size: 50px;
+        letter-spacing: 0.08em;
+        margin: 0 0 8px;
+      }
+      .card {
+        background: linear-gradient(180deg, var(--card), var(--bg2));
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 12px;
+      }
+      .label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        color: var(--text2);
+      }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      input, button {
+        font: inherit;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        padding: 11px 12px;
+      }
+      input { background: #101428; color: var(--text); flex: 1; min-width: 120px; }
+      button { border: none; background: var(--orange); color: #fff; font-weight: 700; cursor: pointer; }
+      button.secondary { background: var(--card2); color: var(--text2); border: 1px solid var(--border); }
+      .hidden { display: none !important; }
+
+      .agency-title {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 56px;
+        line-height: 0.9;
+        letter-spacing: 0.05em;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .money {
+        font-family: 'Bebas Neue', sans-serif;
+        color: var(--green);
+        font-size: 52px;
+        line-height: 0.95;
+      }
+      .charges { color: var(--text2); font-size: 22px; margin-top: 4px; }
+      .charges b { color: var(--orange); }
+
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+      .stat {
+        background: rgba(58,123,213,0.08);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px;
+      }
+      .stat.active { border-color: var(--orange); box-shadow: 0 0 22px rgba(232,131,74,0.2) inset; }
+      .stat .k { color: var(--text2); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+      .stat .v { font-family: 'Bebas Neue', sans-serif; font-size: 52px; line-height: 1; }
+      .spec { color: var(--orange); font-size: 12px; font-weight: 700; margin-left: 6px; }
+
+      .cv {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 9px;
+        margin-top: 8px;
+        background: rgba(255,255,255,0.02);
+      }
+      .cv .role { font-weight: 700; }
+      .cv .meta { color: var(--text2); font-size: 13px; }
+      .cv .bonus { color: var(--green); font-weight: 700; }
+      #actions button { width: 100%; margin-top: 8px; text-align: left; }
+      #status { color: var(--text2); font-size: 13px; margin: 8px 0 0; }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1>Agence - Joueur</h1>
+      <div class="logo">AGENCE</div>
 
-      <div class="card">
-        <div class="row">
+      <div id="lobbyCard" class="card">
+        <div class="label">Connexion joueur</div>
+        <div class="row" style="margin-top:8px">
           <input id="room" maxlength="4" placeholder="Code room (ABCD)" />
-          <input id="firstname" placeholder="Ton prénom" />
+          <input id="firstname" placeholder="Prénom" />
           <button id="joinBtn">Rejoindre</button>
         </div>
-        <p class="muted" id="status">Non connecté.</p>
+        <div id="status">Non connecté.</div>
       </div>
 
-      <div class="card">
-        <h3>Ton profil</h3>
-        <p id="identity">-</p>
-        <p id="capital">Trésorerie: -</p>
-        <p id="turnInfo">Tour en cours: -</p>
+      <div id="startupCard" class="card hidden">
+        <div class="label">Tirage de départ (secret)</div>
+        <h2 id="startupTitle" style="margin:8px 0 10px">En attente...</h2>
+        <div id="startupContent"></div>
+        <button id="startupRollBtn" class="hidden" style="margin-top:10px">🎲 Lancer mon dé de départ</button>
       </div>
 
-      <div class="card">
-        <h3>Forces par catégorie</h3>
-        <ul id="forces"></ul>
+      <div id="gameCard" class="card hidden">
+        <div class="label">Tour en cours</div>
+        <div class="agency-title">
+          <span style="width:18px;height:18px;border-radius:50%;background:var(--blue);display:inline-block"></span>
+          <span id="agencyName">-</span>
+        </div>
+        <div class="money" id="capital">0€</div>
+        <div class="charges">Charges/tour : <b id="charges">0€</b></div>
+
+        <div class="grid" id="forcesGrid"></div>
       </div>
 
-      <div class="card">
-        <h3>CVs privés</h3>
-        <ul id="cvs"></ul>
+      <div id="actionsCard" class="card hidden">
+        <div class="label">Actions</div>
+        <div id="actions"></div>
       </div>
 
-      <div class="card">
-        <h3>Actions disponibles</h3>
-        <div id="actions" class="row"></div>
+      <div id="cvsCard" class="card hidden">
+        <div class="label">Tes CVs</div>
+        <div id="cvs"></div>
       </div>
     </div>
 
@@ -62,17 +156,31 @@
 
       const roomInput = document.getElementById("room");
       const firstNameInput = document.getElementById("firstname");
-      const statusEl = document.getElementById("status");
       const joinBtn = document.getElementById("joinBtn");
-      const identityEl = document.getElementById("identity");
+      const statusEl = document.getElementById("status");
+      const lobbyCard = document.getElementById("lobbyCard");
+      const startupCard = document.getElementById("startupCard");
+      const startupTitle = document.getElementById("startupTitle");
+      const startupContent = document.getElementById("startupContent");
+      const startupRollBtn = document.getElementById("startupRollBtn");
+      const gameCard = document.getElementById("gameCard");
+      const actionsCard = document.getElementById("actionsCard");
+      const cvsCard = document.getElementById("cvsCard");
+      const agencyNameEl = document.getElementById("agencyName");
       const capitalEl = document.getElementById("capital");
-      const turnInfoEl = document.getElementById("turnInfo");
-      const forcesEl = document.getElementById("forces");
+      const chargesEl = document.getElementById("charges");
+      const forcesGrid = document.getElementById("forcesGrid");
       const cvsEl = document.getElementById("cvs");
       const actionsEl = document.getElementById("actions");
 
+      const categories = ["Stratégie", "Graphisme", "Conception", "Média", "Développement"];
       roomInput.value = roomFromUrl ? roomFromUrl.toUpperCase() : "";
       let joined = false;
+      let lastPrivate = null;
+
+      function fmtEuro(v) {
+        return `${Math.round(v / 1000)}k€`;
+      }
 
       function send(payload) {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
@@ -82,80 +190,133 @@
         const roomCode = roomInput.value.trim().toUpperCase();
         const firstName = firstNameInput.value.trim();
         if (roomCode.length !== 4 || !firstName) {
-          statusEl.textContent = "Code room 4 lettres + prénom requis.";
+          statusEl.textContent = "Code room + prénom requis.";
           return;
         }
-
         send({ type: "join_room", roomCode });
-        setTimeout(() => {
-          send({ type: "player_register", clientId, firstName });
-        }, 50);
+        setTimeout(() => send({ type: "player_register", clientId, firstName }), 60);
+      }
+
+      function renderStartup(privateState) {
+        const startup = privateState.startup || {};
+        startupCard.classList.toggle("hidden", !startup.active);
+        if (!startup.active) return;
+
+        const cvRows = (privateState.cvs || []).map((cv) => `
+          <div class="cv">
+            <div class="role">${cv.role}</div>
+            <div class="meta">${cv.level} · ${cv.contract}</div>
+            <div class="meta"><span class="bonus">+${cv.bonus}</span> ${cv.category}</div>
+          </div>
+        `).join("");
+
+        startupTitle.textContent = startup.isCurrent
+          ? "C'est ton tirage de départ"
+          : "Un autre joueur fait son tirage";
+        startupContent.innerHTML = `
+          <div class="meta">Spécialisation: <b>${privateState.specialisation?.name || "-"}</b></div>
+          <div class="meta">Top Secret: <b>${privateState.topSecret?.name || "-"}</b></div>
+          <div class="meta" style="margin-top:8px">CVs de départ :</div>
+          ${cvRows || "<div class='meta'>Aucun CV.</div>"}
+          <div class="meta" style="margin-top:10px">Progression: ${startup.waitingCount || 0}/${startup.totalCount || 0}</div>
+        `;
+
+        startupRollBtn.classList.toggle("hidden", !startup.isCurrent || startup.isDone);
+      }
+
+      function renderGame(privateState) {
+        const gameStarted = Boolean(privateState.gameStarted);
+        if (!gameStarted) return;
+
+        lobbyCard.classList.add("hidden");
+        gameCard.classList.remove("hidden");
+        actionsCard.classList.remove("hidden");
+        cvsCard.classList.remove("hidden");
+
+        agencyNameEl.textContent = privateState.playerName || "-";
+        capitalEl.textContent = fmtEuro(privateState.capital || 0);
+        chargesEl.textContent = fmtEuro(privateState.chargesPerTurn || 0);
+
+        const forces = privateState.forcesByCategory || {};
+        const currentCategory = privateState.specialisation?.category || "";
+        forcesGrid.innerHTML = categories.map((cat) => {
+          const isSpec = cat === currentCategory;
+          const value = Number(forces[cat] || 0);
+          return `
+            <div class="stat ${isSpec ? "active" : ""}">
+              <div class="k">${cat} ${isSpec ? '<span class="spec">★ SPÉC</span>' : ""}</div>
+              <div class="v">+${value}</div>
+            </div>
+          `;
+        }).join("");
+
+        cvsEl.innerHTML = (privateState.cvs || []).map((cv) => `
+          <div class="cv">
+            <div class="role">${cv.role}</div>
+            <div class="meta">${cv.level} · ${cv.contract}</div>
+            <div class="meta"><span class="bonus">+${cv.bonus}</span> ${cv.category}</div>
+          </div>
+        `).join("") || "<div class='meta'>Aucun CV.</div>";
+
+        actionsEl.innerHTML = "";
+        const actions = privateState.actions || [];
+        if (actions.length === 0) {
+          const btn = document.createElement("button");
+          btn.className = "secondary";
+          btn.disabled = true;
+          btn.textContent = `Tour de ${privateState.currentPlayerName || "..."}`;
+          actionsEl.appendChild(btn);
+        } else {
+          actions.forEach((action) => {
+            const btn = document.createElement("button");
+            btn.textContent = action.label;
+            btn.addEventListener("click", () => {
+              send({ type: "player_action", clientId, expr: action.expr });
+            });
+            actionsEl.appendChild(btn);
+          });
+        }
       }
 
       joinBtn.addEventListener("click", joinRoom);
-      firstNameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
+      startupRollBtn.addEventListener("click", () => {
+        send({ type: "player_action", clientId, action: "startup_roll" });
+        startupRollBtn.disabled = true;
+      });
 
       ws.addEventListener("open", () => {
         statusEl.textContent = "Connecté au serveur.";
-        if (roomInput.value && firstNameInput.value) joinRoom();
       });
 
       ws.addEventListener("message", (event) => {
         const data = JSON.parse(event.data);
-
         if (data.type === "joined_room") {
           joined = true;
-          statusEl.textContent = `Connecté à la room ${data.roomCode}. En attente du hub...`;
+          statusEl.textContent = `Room ${data.roomCode} connectée.`;
           return;
         }
-
         if (data.type === "error") {
           statusEl.textContent = `Erreur: ${data.message}`;
           return;
         }
-
         if (data.type !== "relay" || !data.payload) return;
         const payload = data.payload;
 
-        if (payload.type === "lobby_state" && joined) {
-          statusEl.textContent = payload.gameStarted
-            ? "Partie en cours."
-            : `Lobby: ${payload.players.length} joueur(s) connectés.`;
+        if (payload.type === "lobby_state" && joined && !payload.gameStarted) {
+          statusEl.textContent = `Lobby: ${payload.players.length} joueur(s).`;
           return;
         }
-
+        if (payload.type === "startup_roll_result" && payload.targetClientId === clientId) {
+          startupRollBtn.disabled = true;
+          startupTitle.textContent = `Dé ${payload.roll} → ${fmtEuro(payload.capital)}`;
+          return;
+        }
         if (payload.type !== "private_state" || payload.targetClientId !== clientId) return;
 
-        identityEl.textContent = `${payload.playerName} — ${payload.specialisation?.name || "Spécialisation cachée"}`;
-        capitalEl.textContent = `Trésorerie: ${Intl.NumberFormat("fr-FR").format(payload.capital)} €`;
-        turnInfoEl.textContent = `Tour en cours: ${payload.currentPlayerName || "-"}`;
-
-        const forces = Object.entries(payload.forcesByCategory || {});
-        forcesEl.innerHTML = forces.length
-          ? forces.map(([cat, value]) => `<li>${cat}: ${value}</li>`).join("")
-          : "<li>Aucune force active.</li>";
-
-        const cvs = payload.cvs || [];
-        cvsEl.innerHTML = cvs.length
-          ? cvs.map((cv) => `<li>${cv.name || "CV"} — ${cv.category || "?"} (${cv.force || 0})</li>`).join("")
-          : "<li>Aucun CV.</li>";
-
-        actionsEl.innerHTML = "";
-        (payload.actions || []).forEach((action) => {
-          const btn = document.createElement("button");
-          btn.textContent = action.label;
-          btn.addEventListener("click", () => {
-            send({ type: "player_action", clientId, expr: action.expr });
-          });
-          actionsEl.appendChild(btn);
-        });
-        if (!payload.actions || payload.actions.length === 0) {
-          const waitBtn = document.createElement("button");
-          waitBtn.textContent = "En attente de ton tour";
-          waitBtn.className = "secondary";
-          waitBtn.disabled = true;
-          actionsEl.appendChild(waitBtn);
-        }
+        lastPrivate = payload;
+        renderStartup(payload);
+        if (!payload.startup?.active) startupCard.classList.add("hidden");
+        renderGame(payload);
       });
     </script>
   </body>

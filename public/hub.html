@@ -889,6 +889,10 @@
   .spec-title { font-family: 'Bebas Neue'; font-size: 16px; color: var(--blue-light); }
   .spec-desc { font-size: 12px; color: var(--text2); margin-top: 3px; }
 
+  /* Hub epure: le panel d'actions est retire de l'UI */
+  .game-body { grid-template-columns: 1fr !important; }
+  .side-panel { display: none !important; }
+
 </style>
 </head>
 <body>
@@ -3082,11 +3086,10 @@ const lobbyByClientId = new Map();
 const lobbyJoinOrder = [];
 let gameStartedFromHub = false;
 let latestActionsByPlayerId = new Map();
+const startupState = { active: false, currentIdx: null, doneByPlayerId: {} };
 
 function hubSend(payload) {
-  if (hubSocket.readyState === WebSocket.OPEN) {
-    hubSocket.send(JSON.stringify(payload));
-  }
+  if (hubSocket.readyState === WebSocket.OPEN) hubSocket.send(JSON.stringify(payload));
 }
 
 function updateHubRoomUI(data) {
@@ -3098,14 +3101,8 @@ function updateHubRoomUI(data) {
 }
 
 function renderLobbyFromPhones() {
-  const players = lobbyJoinOrder
-    .map((clientId) => lobbyByClientId.get(clientId))
-    .filter(Boolean);
-
-  setupPlayers = players.map((p) => ({
-    firstname: p.firstName,
-    agencyName: generateAgencyName(p.firstName)
-  }));
+  const players = lobbyJoinOrder.map((clientId) => lobbyByClientId.get(clientId)).filter(Boolean);
+  setupPlayers = players.map((p) => ({ firstname: p.firstName, agencyName: generateAgencyName(p.firstName) }));
   renderSetup();
 
   const status = players.length >= 2
@@ -3124,7 +3121,7 @@ function computeForcesByCategory(player) {
   const totals = {};
   (player.hand || []).forEach((cv) => {
     if (!cv || !cv.category) return;
-    totals[cv.category] = (totals[cv.category] || 0) + (cv.force || 0);
+    totals[cv.category] = (totals[cv.category] || 0) + (cv.bonus || 0);
   });
   return totals;
 }
@@ -3140,12 +3137,29 @@ function extractCurrentActions() {
   }));
 }
 
+function findClientIdByPlayerId(playerId) {
+  return lobbyJoinOrder.find((clientId) => lobbyByClientId.get(clientId)?.playerId === playerId) || null;
+}
+
+function normalizeCV(cv) {
+  return {
+    role: cv?.role || 'CV',
+    category: cv?.category || 'Autre',
+    bonus: cv?.bonus || 0,
+    contract: cv?.contract || '',
+    level: cv?.level || '',
+    cost: cv?.cost || 0
+  };
+}
+
 function syncPhonesWithGame() {
   if (!G || !Array.isArray(G.players) || G.players.length === 0) return;
 
   const currentPlayerId = G.currentPlayerIdx;
   latestActionsByPlayerId = new Map();
-  latestActionsByPlayerId.set(currentPlayerId, extractCurrentActions());
+  if (!startupState.active) {
+    latestActionsByPlayerId.set(currentPlayerId, extractCurrentActions());
+  }
 
   lobbyJoinOrder.forEach((clientId) => {
     const phone = lobbyByClientId.get(clientId);
@@ -3157,38 +3171,91 @@ function syncPhonesWithGame() {
       type: 'private_state',
       targetClientId: clientId,
       gameStarted: true,
+      startup: {
+        active: startupState.active,
+        isCurrent: startupState.currentIdx === phone.playerId,
+        isDone: Boolean(startupState.doneByPlayerId[phone.playerId]),
+        waitingCount: Object.values(startupState.doneByPlayerId).filter(Boolean).length,
+        totalCount: G.players.length,
+        startRoll: player.startRoll || null
+      },
       playerId: player.id,
       playerName: player.name,
       capital: player.capital,
+      chargesPerTurn: getCharges(player),
       specialisation: player.specialisation,
       topSecret: player.topSecret,
-      cvs: player.hand || [],
+      cvs: (player.hand || []).map(normalizeCV),
       forcesByCategory: computeForcesByCategory(player),
       currentPlayerId,
       currentPlayerName: G.players[currentPlayerId]?.name || '',
-      actions: phone.playerId === currentPlayerId ? latestActionsByPlayerId.get(currentPlayerId) || [] : []
+      actions: !startupState.active && phone.playerId === currentPlayerId
+        ? latestActionsByPlayerId.get(currentPlayerId) || []
+        : []
     };
     hubSend(privatePayload);
   });
 }
 
+function completeStartupRoll(clientId) {
+  if (!startupState.active || startupState.currentIdx === null) return;
+  const playerInfo = lobbyByClientId.get(clientId);
+  if (!playerInfo || playerInfo.playerId !== startupState.currentIdx) return;
+
+  const p = G.players[playerInfo.playerId];
+  if (!p) return;
+  const roll = rollD6();
+  const capital = roll <= 2 ? 150000 : roll <= 4 ? 200000 : 250000;
+  p.startRoll = roll;
+  p.capital = capital;
+  startupState.doneByPlayerId[playerInfo.playerId] = true;
+
+  hubSend({
+    type: 'startup_roll_result',
+    targetClientId: clientId,
+    roll,
+    capital
+  });
+
+  rollCapitalForPlayer(playerInfo.playerId + 1);
+}
+
 function handlePlayerAction(payload) {
+  if (payload.action === 'startup_roll') {
+    completeStartupRoll(payload.clientId);
+    return;
+  }
+
   if (!G || !Array.isArray(G.players)) return;
   const playerInfo = lobbyByClientId.get(payload.clientId);
   if (!playerInfo || typeof playerInfo.playerId !== 'number') return;
-  if (playerInfo.playerId !== G.currentPlayerIdx) return;
+  if (playerInfo.playerId !== G.currentPlayerIdx || startupState.active) return;
 
   const allowed = latestActionsByPlayerId.get(playerInfo.playerId) || [];
   const chosen = allowed.find((a) => a.expr === payload.expr);
   if (!chosen) return;
 
   try {
-    // Expression comes from hub-rendered action buttons.
-    // eslint-disable-next-line no-new-func
     new Function(chosen.expr)();
   } catch (error) {
     addLog(`⚠️ Action distante invalide: ${error.message}`);
   }
+}
+
+function rollCapitalForPlayer(idx) {
+  if (idx >= G.players.length) {
+    startupState.active = false;
+    startupState.currentIdx = null;
+    G.players.forEach((p) => {
+      addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> démarre avec <span class="log-amount gain">${fmt(p.capital)}</span> (dé : ${p.startRoll})`);
+    });
+    render();
+    return;
+  }
+
+  startupState.active = true;
+  startupState.currentIdx = idx;
+  syncPhonesWithGame();
 }
 
 hubSocket.addEventListener('open', () => {
@@ -3197,19 +3264,15 @@ hubSocket.addEventListener('open', () => {
 
 hubSocket.addEventListener('message', (event) => {
   const data = JSON.parse(event.data);
-
   if (data.type === 'room_created') {
     updateHubRoomUI(data);
     return;
   }
-
   if (data.type !== 'relay' || !data.payload) return;
-  const payload = data.payload;
 
+  const payload = data.payload;
   if (payload.type === 'player_register') {
-    if (!lobbyByClientId.has(payload.clientId)) {
-      lobbyJoinOrder.push(payload.clientId);
-    }
+    if (!lobbyByClientId.has(payload.clientId)) lobbyJoinOrder.push(payload.clientId);
     lobbyByClientId.set(payload.clientId, {
       clientId: payload.clientId,
       firstName: payload.firstName || `Joueur ${lobbyJoinOrder.length}`,
@@ -3218,33 +3281,27 @@ hubSocket.addEventListener('message', (event) => {
     renderLobbyFromPhones();
     return;
   }
-
-  if (payload.type === 'player_action') {
-    handlePlayerAction(payload);
-  }
+  if (payload.type === 'player_action') handlePlayerAction(payload);
 });
 
 const _startGame = startGame;
 startGame = function startGameFromPhones() {
-  const players = lobbyJoinOrder
-    .map((clientId) => lobbyByClientId.get(clientId))
-    .filter(Boolean);
+  const players = lobbyJoinOrder.map((clientId) => lobbyByClientId.get(clientId)).filter(Boolean);
   if (players.length < 2) {
     alert('Il faut au moins 2 joueurs connectés sur téléphone.');
     return;
   }
 
-  setupPlayers = players.map((p) => ({
-    firstname: p.firstName,
-    agencyName: generateAgencyName(p.firstName)
-  }));
-  _startGame();
-
+  setupPlayers = players.map((p) => ({ firstname: p.firstName, agencyName: generateAgencyName(p.firstName) }));
   players.forEach((p, idx) => {
     p.playerId = idx;
     lobbyByClientId.set(p.clientId, p);
   });
+  startupState.active = true;
+  startupState.currentIdx = 0;
+  startupState.doneByPlayerId = {};
   gameStartedFromHub = true;
+  _startGame();
   syncPhonesWithGame();
 };
 
@@ -3259,6 +3316,9 @@ restartGame = function restartGameAndLobby() {
   _restartGame();
   gameStartedFromHub = false;
   latestActionsByPlayerId = new Map();
+  startupState.active = false;
+  startupState.currentIdx = null;
+  startupState.doneByPlayerId = {};
   lobbyByClientId.forEach((p) => { p.playerId = null; });
   renderLobbyFromPhones();
 };
