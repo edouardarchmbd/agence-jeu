@@ -455,7 +455,7 @@
               return;
             }
             btn.addEventListener("click", () => {
-              if (action.action === "roll") {
+              if (action.action === "roll" || action.expr === "doRoll()" || /lancer le d[ée]/i.test(action.label || "")) {
                 forcedAction = null;
                 send({ type: "player_action", clientId, action: "roll" });
                 return;

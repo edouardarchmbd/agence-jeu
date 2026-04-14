@@ -3483,6 +3483,16 @@ function handlePlayerAction(payload) {
     return;
   }
 
+  if (payload.expr === 'doRoll()') {
+    if (!G || !Array.isArray(G.players)) return;
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || typeof playerInfo.playerId !== 'number') return;
+    if (playerInfo.playerId !== G.currentPlayerIdx || startupState.active) return;
+    if (G.phase !== 'roll') return;
+    doRoll();
+    return;
+  }
+
   if (payload.action === 'end_turn') {
     if (!G || !Array.isArray(G.players)) return;
     const playerInfo = lobbyByClientId.get(payload.clientId);
