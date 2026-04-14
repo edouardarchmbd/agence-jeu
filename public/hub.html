@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agence - Hub</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2rem;
+      }
+      #qr {
+        width: 260px;
+        height: 260px;
+        border: 1px solid #ddd;
+        display: block;
+      }
+      pre {
+        background: #f7f7f7;
+        padding: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Agence - Hub</h1>
+    <p>Code room: <strong id="room-code">...</strong></p>
+    <img id="qr" alt="QR code de connexion joueur" />
+    <p>Lien joueur: <a id="join-link" href="#" target="_blank" rel="noreferrer"></a></p>
+    <h2>Evenements</h2>
+    <pre id="log"></pre>
+
+    <script>
+      const roomCodeEl = document.getElementById("room-code");
+      const qrEl = document.getElementById("qr");
+      const joinLinkEl = document.getElementById("join-link");
+      const logEl = document.getElementById("log");
+
+      const ws = new WebSocket(`ws://${window.location.host}`);
+
+      function log(message) {
+        const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logEl.textContent = `${line}\n${logEl.textContent}`;
+      }
+
+      ws.addEventListener("open", () => {
+        ws.send(JSON.stringify({ type: "create_room" }));
+      });
+
+      ws.addEventListener("message", (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "room_created") {
+          roomCodeEl.textContent = data.roomCode;
+          qrEl.src = data.qrDataUrl;
+          joinLinkEl.href = data.joinUrl;
+          joinLinkEl.textContent = data.joinUrl;
+          log(`Room ${data.roomCode} creee.`);
+          return;
+        }
+
+        if (data.type === "participant_joined") {
+          log("Un joueur a rejoint.");
+          return;
+        }
+
+        if (data.type === "participant_left") {
+          log("Un participant a quitte.");
+          return;
+        }
+
+        if (data.type === "relay") {
+          log(`Message recu: ${JSON.stringify(data.payload)}`);
+          return;
+        }
+
+        if (data.type === "error") {
+          log(`Erreur: ${data.message}`);
+        }
+      });
+    </script>
+  </body>
+  </html>

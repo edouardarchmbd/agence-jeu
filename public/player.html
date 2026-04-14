@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agence - Player</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2rem;
+      }
+      form {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      input {
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+      pre {
+        background: #f7f7f7;
+        padding: 1rem;
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Agence - Joueur</h1>
+    <form id="join-form">
+      <label>
+        Code room (4 lettres):
+        <input id="room-code-input" maxlength="4" required />
+      </label>
+      <button type="submit">Rejoindre</button>
+    </form>
+    <p id="status">Non connecte</p>
+    <button id="send-test" type="button">Envoyer un message test</button>
+    <pre id="log"></pre>
+
+    <script>
+      const joinForm = document.getElementById("join-form");
+      const roomCodeInput = document.getElementById("room-code-input");
+      const statusEl = document.getElementById("status");
+      const sendTestBtn = document.getElementById("send-test");
+      const logEl = document.getElementById("log");
+      const roomFromQuery = new URLSearchParams(window.location.search).get("room");
+
+      if (roomFromQuery) {
+        roomCodeInput.value = roomFromQuery.toUpperCase();
+      }
+
+      const ws = new WebSocket(`ws://${window.location.host}`);
+      let joinedRoom = null;
+
+      function log(message) {
+        const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logEl.textContent = `${line}\n${logEl.textContent}`;
+      }
+
+      joinForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const roomCode = roomCodeInput.value.trim().toUpperCase();
+        if (roomCode.length !== 4) {
+          log("Le code room doit contenir 4 lettres.");
+          return;
+        }
+        ws.send(JSON.stringify({ type: "join_room", roomCode }));
+      });
+
+      sendTestBtn.addEventListener("click", () => {
+        if (!joinedRoom) {
+          log("Rejoins une room avant d'envoyer un message.");
+          return;
+        }
+        ws.send(
+          JSON.stringify({
+            type: "player_action",
+            action: "test_ping",
+            at: Date.now()
+          })
+        );
+      });
+
+      ws.addEventListener("open", () => {
+        statusEl.textContent = "Connecte au serveur";
+        if (roomCodeInput.value.length === 4) {
+          ws.send(
+            JSON.stringify({
+              type: "join_room",
+              roomCode: roomCodeInput.value.toUpperCase()
+            })
+          );
+        }
+      });
+
+      ws.addEventListener("message", (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "joined_room") {
+          joinedRoom = data.roomCode;
+          statusEl.textContent = `Dans la room ${joinedRoom}`;
+          log(`Room ${joinedRoom} rejointe.`);
+          return;
+        }
+
+        if (data.type === "relay") {
+          log(`Message recu: ${JSON.stringify(data.payload)}`);
+          return;
+        }
+
+        if (data.type === "error") {
+          log(`Erreur: ${data.message}`);
+          return;
+        }
+
+        log(`Evenement: ${JSON.stringify(data)}`);
+      });
+    </script>
+  </body>
+  </html>
