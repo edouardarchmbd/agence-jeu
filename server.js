@@ -17,6 +17,8 @@ app.get("/", (_req, res) => {
   res.redirect("/hub.html");
 });
 
+app.get("/healthz", (_req, res) => res.sendStatus(200));
+
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
