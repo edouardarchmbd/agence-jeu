@@ -3157,9 +3157,6 @@ function syncPhonesWithGame() {
 
   const currentPlayerId = G.currentPlayerIdx;
   latestActionsByPlayerId = new Map();
-  if (!startupState.active) {
-    latestActionsByPlayerId.set(currentPlayerId, extractCurrentActions());
-  }
 
   lobbyJoinOrder.forEach((clientId) => {
     const phone = lobbyByClientId.get(clientId);
@@ -3168,6 +3165,9 @@ function syncPhonesWithGame() {
     if (!player) return;
 
     const phoneActions = buildPhoneActionsForPlayer(player);
+    if (!startupState.active && player.id === currentPlayerId) {
+      latestActionsByPlayerId.set(currentPlayerId, phoneActions);
+    }
     const privatePayload = {
       type: 'private_state',
       targetClientId: clientId,
