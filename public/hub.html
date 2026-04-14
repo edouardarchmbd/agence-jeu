@@ -3165,6 +3165,66 @@ function extractCurrentActions() {
   }));
 }
 
+function sendPlayerAction(playerId, actionData) {
+  const clientId = findClientIdByPlayerId(playerId);
+  if (!clientId) return;
+  hubSend({
+    type: 'your_turn',
+    targetClientId: clientId,
+    actionData
+  });
+}
+
+function buildPhoneActionsForPlayer(player) {
+  if (!G || startupState.active || player.id !== G.currentPlayerIdx) return [];
+
+  if (G.phase === 'roll') {
+    return [{ id: 'roll', label: '🎲 Lancer le dé', action: 'roll' }];
+  }
+
+  if (G.phase !== 'action') return [];
+  const cell = BOARD_CELLS[player.position];
+  if (!cell) return [];
+
+  if (cell.type === 'repos') {
+    return [{ id: 'rest-end', label: '😴 Fin du tour', expr: 'endTurn()' }];
+  }
+  if (cell.type === 'depart') {
+    return [{ id: 'depart-charges', label: '✅ Payer les charges et continuer', expr: 'payCharges()' }];
+  }
+  if (cell.type === 'tva-remb') {
+    return [{ id: 'refund', label: '💰 Récupérer le pot TVA et continuer', expr: 'getRefund()' }];
+  }
+  if (cell.type === 'tva') {
+    const amount = cell.sub.includes('30') ? 30000 : 50000;
+    return [{ id: 'taxes', label: '💸 Payer les taxes et continuer', expr: `payTVA(${amount})` }];
+  }
+  if (cell.type === 'cv') {
+    if (G.currentCV) {
+      const c = G.currentCV;
+      return [
+        { id: 'cv-info', label: `👤 ${c.role} · ${c.level} ${c.contract} · +${c.bonus} ${c.category}`, disabled: true },
+        { id: 'cv-recruit', label: '✅ Recruter', expr: 'recruitCV()' },
+        { id: 'cv-refuse', label: '❌ Refuser', expr: 'refuseCV()' }
+      ];
+    }
+    return [{ id: 'cv-start', label: '👤 Voir le CV', expr: 'startCV()' }];
+  }
+  if (cell.type === 'brief') {
+    if (G.currentBrief) return [{ id: 'brief-roll', label: '🎲 Lancer le dé Brief', expr: 'rollBriefDie()' }];
+    return [{ id: 'brief-start', label: '📩 Tirer la carte Brief', expr: 'startBrief()' }];
+  }
+  if (cell.type === 'hasard') {
+    if (G.currentHasard) return [{ id: 'hasard-continue', label: 'Continuer', expr: 'closeHasard()' }];
+    return [{ id: 'hasard-start', label: '🎴 Piocher la carte Hasard', expr: 'startHasard()' }];
+  }
+  if (cell.type === 'ao' || cell.type === 'ao-a') {
+    return extractCurrentActions();
+  }
+
+  return [{ id: 'fallback-next', label: 'Continuer', expr: 'endTurn()' }];
+}
+
 function findClientIdByPlayerId(playerId) {
   return lobbyJoinOrder.find((clientId) => lobbyByClientId.get(clientId)?.playerId === playerId) || null;
 }
@@ -3195,6 +3255,7 @@ function syncPhonesWithGame() {
     const player = G.players[phone.playerId];
     if (!player) return;
 
+    const phoneActions = buildPhoneActionsForPlayer(player);
     const privatePayload = {
       type: 'private_state',
       targetClientId: clientId,
@@ -3228,18 +3289,12 @@ function syncPhonesWithGame() {
       forcesByCategory: computeForcesByCategory(player),
       currentPlayerId,
       currentPlayerName: G.players[currentPlayerId]?.name || '',
-      actions: !startupState.active && phone.playerId === currentPlayerId
-        ? latestActionsByPlayerId.get(currentPlayerId) || []
-        : []
+      actions: phoneActions
     };
     hubSend(privatePayload);
 
-    if (!startupState.active && phone.playerId === currentPlayerId && G.phase === 'roll') {
-      hubSend({
-        type: 'your_turn',
-        targetClientId: clientId,
-        action: 'roll'
-      });
+    if (phoneActions.length > 0) {
+      sendPlayerAction(player.id, phoneActions[0]);
     }
   });
   updateHubStartupStatus();
@@ -3321,6 +3376,15 @@ function handlePlayerAction(payload) {
     if (playerInfo.playerId !== G.currentPlayerIdx || startupState.active) return;
     if (G.phase !== 'roll') return;
     doRoll();
+    return;
+  }
+
+  if (payload.action === 'end_turn') {
+    if (!G || !Array.isArray(G.players)) return;
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || typeof playerInfo.playerId !== 'number') return;
+    if (playerInfo.playerId !== G.currentPlayerIdx || startupState.active) return;
+    endTurn();
     return;
   }
 

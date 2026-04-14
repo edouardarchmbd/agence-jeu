@@ -251,6 +251,7 @@
       let lastPrivate = null;
       let startupFlicker = null;
       let pendingRollTurn = false;
+      let forcedAction = null;
 
       function fmtEuro(v) {
         return `${Math.round(v / 1000)}k€`;
@@ -374,6 +375,9 @@
 
         actionsEl.innerHTML = "";
         const actions = [...(privateState.actions || [])];
+        if (forcedAction) {
+          actions.unshift(forcedAction);
+        }
         if (pendingRollTurn && privateState.phase === "roll") {
           actions.unshift({ id: "turn-roll", label: "🎲 Lancer le dé", action: "roll" });
         }
@@ -387,10 +391,22 @@
           actions.forEach((action) => {
             const btn = document.createElement("button");
             btn.textContent = action.label;
+            if (action.disabled) {
+              btn.className = "secondary";
+              btn.disabled = true;
+              actionsEl.appendChild(btn);
+              return;
+            }
             btn.addEventListener("click", () => {
               if (action.action === "roll") {
                 pendingRollTurn = false;
+                forcedAction = null;
                 send({ type: "player_action", clientId, action: "roll" });
+                return;
+              }
+              if (action.action === "end_turn") {
+                forcedAction = null;
+                send({ type: "player_action", clientId, action: "end_turn" });
                 return;
               }
               send({ type: "player_action", clientId, expr: action.expr });
@@ -473,8 +489,13 @@
           startupTitle.textContent = `Dé ${payload.roll} → ${fmtEuro(payload.capital)}`;
           return;
         }
-        if (payload.type === "your_turn" && payload.targetClientId === clientId && payload.action === "roll") {
-          pendingRollTurn = true;
+        if (payload.type === "your_turn" && payload.targetClientId === clientId) {
+          if (payload.action === "roll") {
+            pendingRollTurn = true;
+          }
+          if (payload.actionData) {
+            forcedAction = payload.actionData;
+          }
           if (lastPrivate) renderGame(lastPrivate);
           return;
         }
@@ -483,6 +504,9 @@
         lastPrivate = payload;
         if (payload.phase !== "roll" || payload.currentPlayerId !== payload.playerId) {
           pendingRollTurn = false;
+        }
+        if (payload.currentPlayerId !== payload.playerId) {
+          forcedAction = null;
         }
         renderStartup(payload);
         if (!payload.startup?.active) startupCard.classList.add("hidden");
