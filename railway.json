@@ -1,6 +1,0 @@
-{
-  "deploy": {
-    "healthcheckPath": "/healthz",
-    "healthcheckTimeout": 30
-  }
-}
