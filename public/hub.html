@@ -3274,6 +3274,8 @@ function buildPhoneActionsForPlayer(player) {
     return [{ id: 'hasard-start', label: '🎴 Piocher la carte Hasard', expr: 'startHasard()' }];
   }
   if (cell.type === 'ao' || cell.type === 'ao-a') {
+    // Once an AO has started, AO flow is fully driven by dedicated messages.
+    if (G.currentAO) return [];
     return [{ id: 'ao-start', label: '📋 Lancer l’AO', expr: 'startAO()' }];
   }
 
@@ -3335,6 +3337,7 @@ function syncPhonesWithGame() {
       },
       playerId: player.id,
       playerName: player.name,
+      playerColor: player.color,
       capital: player.capital,
       chargesPerTurn: getCharges(player),
       specialisation: player.specialisation,

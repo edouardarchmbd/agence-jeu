@@ -226,7 +226,7 @@
       <div id="gameCard" class="card hidden">
         <div class="label">Tour en cours</div>
         <div class="agency-title">
-          <span style="width:18px;height:18px;border-radius:50%;background:var(--blue);display:inline-block"></span>
+          <span id="playerDot" style="width:18px;height:18px;border-radius:50%;background:var(--blue);display:inline-block"></span>
           <span id="agencyName">-</span>
         </div>
         <div class="money" id="capital">0€</div>
@@ -290,6 +290,7 @@
       const topSecretCard = document.getElementById("topSecretCard");
       const topSecretNameEl = document.getElementById("topSecretName");
       const topSecretTextEl = document.getElementById("topSecretText");
+      const playerDotEl = document.getElementById("playerDot");
       const agencyNameEl = document.getElementById("agencyName");
       const capitalEl = document.getElementById("capital");
       const chargesEl = document.getElementById("charges");
@@ -396,12 +397,13 @@
 
         lobbyCard.classList.add("hidden");
         gameCard.classList.remove("hidden");
-        actionsCard.classList.remove("hidden");
+        actionsCard.classList.toggle("hidden", Boolean(aoPreState || aoRollState || aoWinnerPending));
         cvsCard.classList.remove("hidden");
         topSecretCard.classList.remove("hidden");
         aoCard.classList.toggle("hidden", !(aoPreState || aoRollState || aoWinnerPending));
 
         agencyNameEl.textContent = privateState.playerName || "-";
+        playerDotEl.style.background = privateState.playerColor || "var(--blue)";
         capitalEl.textContent = fmtEuro(privateState.capital || 0);
         chargesEl.textContent = fmtEuro(privateState.chargesPerTurn || 0);
         topSecretNameEl.textContent = privateState.topSecret?.name || "-";
@@ -568,15 +570,16 @@
             aoPreState = payload.actionData;
             aoRollState = null;
             aoWinnerPending = false;
+            forcedAction = null;
             const c = aoPreState;
             aoContent.innerHTML = `
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <div>
-                  <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--orange)">📋 AO — ${c.client}</div>
-                  <div class="meta" style="margin-top:8px;border:1px solid var(--orange);border-radius:8px;padding:6px;color:var(--orange)">
+                <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px">
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--orange)">📋 AO — ${c.client}</div>
+                  <div class="meta" style="margin-top:6px;border:1px solid var(--orange);border-radius:8px;padding:6px;color:var(--orange);background:rgba(232,131,74,0.08)">
                     1ère catégorie : <b>${c.firstCat}</b>
                   </div>
-                  <div class="meta" style="margin-top:8px">Mes forces</div>
+                  <div class="meta" style="margin-top:10px">Mes forces</div>
                   ${["Stratégie","Graphisme","Conception","Média","Développement"].map((cat) => `
                     <div class="force-bar ${cat === c.firstCat ? "is-spec" : ""}">
                       <div class="force-bar-fill" style="transform:scaleX(${Math.min((Number(c.forces?.[cat] || 0) + 1) / 8, 1)})"></div>
@@ -585,16 +588,16 @@
                     </div>
                   `).join("")}
                 </div>
-                <div>
-                  <div class="meta" style="margin-bottom:6px">Freelances disponibles</div>
+                <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px">
+                  <div class="meta" style="margin-bottom:8px">Freelances disponibles</div>
                   ${(aoPreState.freelances || []).map((f) => `
-                    <label class="meta" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+                    <label class="meta" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px">
                       <input id="ao-fl-${f.idx}" type="checkbox" />
                       <span>${f.role} (+${f.bonus} ${f.category})</span>
                     </label>
                   `).join("") || "<div class='meta'>Aucun freelance.</div>"}
                   ${aoPreState.topSecret ? `
-                    <label class="meta" style="display:flex;gap:6px;align-items:center;margin-top:8px;padding:8px;border:1px solid var(--yellow);border-radius:8px;color:var(--yellow)">
+                    <label class="meta" style="display:flex;gap:6px;align-items:center;margin-top:10px;padding:8px;border:1px solid var(--yellow);border-radius:8px;color:var(--yellow);background:rgba(240,192,64,0.08)">
                       <input id="ao-ts-use" type="checkbox" />
                       <span><b>${aoPreState.topSecret.name}</b><br>${aoPreState.topSecret.text}</span>
                     </label>
@@ -610,6 +613,7 @@
             aoRollState = payload.actionData;
             aoPreState = null;
             aoWinnerPending = false;
+            forcedAction = null;
             aoContent.innerHTML = `<div class="meta">AO ${payload.actionData.category} — bonus CV: <b>+${payload.actionData.cvBonus}</b>${payload.actionData.extra ? `, extra: <b>+${payload.actionData.extra}</b>` : ""}</div>`;
             aoRollBtn.classList.remove("hidden");
             aoRollBtn.disabled = false;
@@ -619,6 +623,7 @@
             aoWinnerPending = true;
             aoPreState = null;
             aoRollState = null;
+            forcedAction = null;
             aoContent.innerHTML = `<div class="meta">Tu as gagné l'AO. Clique pour continuer.</div>`;
             aoWinnerContinueBtn.classList.remove("hidden");
             aoWinnerContinueBtn.disabled = false;
@@ -628,6 +633,7 @@
             aoPreState = null;
             aoRollState = null;
             aoWinnerPending = false;
+            forcedAction = null;
             aoContent.innerHTML = `<div class="meta">⏳ En attente de ${payload.actionData.playerName}...</div>`;
             aoConfirmBtn.classList.add("hidden");
             aoRollBtn.classList.add("hidden");
