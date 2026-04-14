@@ -3096,6 +3096,8 @@ let latestActionsByPlayerId = new Map();
 const startupState = {
   active: false,
   doneByPlayerId: {},
+  rollDoneByPlayerId: {},
+  specRevealedByPlayerId: {},
   tsRevealedByPlayerId: {},
   cvsRevealedByPlayerId: {}
 };
@@ -3127,6 +3129,12 @@ function renderLobbyFromPhones() {
     players: players.map((p) => ({ firstName: p.firstName })),
     gameStarted: gameStartedFromHub
   });
+}
+
+function updateHubStartupStatus() {
+  if (!startupState.active || !G || !Array.isArray(G.players)) return;
+  const ready = Object.values(startupState.doneByPlayerId).filter(Boolean).length;
+  document.getElementById('hub-lobby-status').textContent = `En attente du tirage des joueurs... ${ready}/${G.players.length} prêts`;
 }
 
 function computeForcesByCategory(player) {
@@ -3194,9 +3202,16 @@ function syncPhonesWithGame() {
       startup: {
         active: startupState.active,
         isDone: Boolean(startupState.doneByPlayerId[phone.playerId]),
+        rollDone: Boolean(startupState.rollDoneByPlayerId[phone.playerId]),
+        specRevealed: Boolean(startupState.specRevealedByPlayerId[phone.playerId]),
         tsRevealed: Boolean(startupState.tsRevealedByPlayerId[phone.playerId]),
         cvsRevealed: Boolean(startupState.cvsRevealedByPlayerId[phone.playerId]),
-        canRoll: Boolean(startupState.tsRevealedByPlayerId[phone.playerId] && startupState.cvsRevealedByPlayerId[phone.playerId]),
+        canReady: Boolean(
+          startupState.rollDoneByPlayerId[phone.playerId]
+          && startupState.specRevealedByPlayerId[phone.playerId]
+          && startupState.tsRevealedByPlayerId[phone.playerId]
+          && startupState.cvsRevealedByPlayerId[phone.playerId]
+        ),
         waitingCount: Object.values(startupState.doneByPlayerId).filter(Boolean).length,
         totalCount: G.players.length,
         startRoll: player.startRoll || null
@@ -3208,6 +3223,7 @@ function syncPhonesWithGame() {
       specialisation: player.specialisation,
       topSecret: player.topSecret,
       cvs: (player.hand || []).map(normalizeCV),
+      hand: (player.hand || []).map(normalizeCV),
       forcesByCategory: computeForcesByCategory(player),
       currentPlayerId,
       currentPlayerName: G.players[currentPlayerId]?.name || '',
@@ -3217,30 +3233,19 @@ function syncPhonesWithGame() {
     };
     hubSend(privatePayload);
   });
+  updateHubStartupStatus();
 }
 
-function completeStartupRoll(clientId) {
+function completeStartupReady(clientId) {
   if (!startupState.active) return;
   const playerInfo = lobbyByClientId.get(clientId);
   if (!playerInfo) return;
   if (startupState.doneByPlayerId[playerInfo.playerId]) return;
+  if (!startupState.rollDoneByPlayerId[playerInfo.playerId]) return;
+  if (!startupState.specRevealedByPlayerId[playerInfo.playerId]) return;
   if (!startupState.tsRevealedByPlayerId[playerInfo.playerId]) return;
   if (!startupState.cvsRevealedByPlayerId[playerInfo.playerId]) return;
-
-  const p = G.players[playerInfo.playerId];
-  if (!p) return;
-  const roll = rollD6();
-  const capital = roll <= 2 ? 150000 : roll <= 4 ? 200000 : 250000;
-  p.startRoll = roll;
-  p.capital = capital;
   startupState.doneByPlayerId[playerInfo.playerId] = true;
-
-  hubSend({
-    type: 'startup_roll_result',
-    targetClientId: clientId,
-    roll,
-    capital
-  });
 
   const doneCount = Object.values(startupState.doneByPlayerId).filter(Boolean).length;
   if (doneCount >= G.players.length) {
@@ -3251,6 +3256,14 @@ function completeStartupRoll(clientId) {
 }
 
 function handlePlayerAction(payload) {
+  if (payload.action === 'startup_reveal_spec') {
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || startupState.doneByPlayerId[playerInfo.playerId]) return;
+    startupState.specRevealedByPlayerId[playerInfo.playerId] = true;
+    syncPhonesWithGame();
+    return;
+  }
+
   if (payload.action === 'startup_reveal_ts') {
     const playerInfo = lobbyByClientId.get(payload.clientId);
     if (!playerInfo || startupState.doneByPlayerId[playerInfo.playerId]) return;
@@ -3267,8 +3280,28 @@ function handlePlayerAction(payload) {
     return;
   }
 
-  if (payload.action === 'startup_roll') {
-    completeStartupRoll(payload.clientId);
+  if (payload.action === 'startup_roll_die') {
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || startupState.doneByPlayerId[playerInfo.playerId]) return;
+    const p = G.players[playerInfo.playerId];
+    if (!p) return;
+    const roll = rollD6();
+    const capital = roll <= 2 ? 150000 : roll <= 4 ? 200000 : 250000;
+    p.startRoll = roll;
+    p.capital = capital;
+    startupState.rollDoneByPlayerId[playerInfo.playerId] = true;
+    hubSend({
+      type: 'startup_roll_result',
+      targetClientId: payload.clientId,
+      roll,
+      capital
+    });
+    syncPhonesWithGame();
+    return;
+  }
+
+  if (payload.action === 'startup_ready') {
+    completeStartupReady(payload.clientId);
     return;
   }
 
@@ -3343,6 +3376,8 @@ startGame = function startGameFromPhones() {
   });
   startupState.active = true;
   startupState.doneByPlayerId = {};
+  startupState.rollDoneByPlayerId = {};
+  startupState.specRevealedByPlayerId = {};
   startupState.tsRevealedByPlayerId = {};
   startupState.cvsRevealedByPlayerId = {};
   gameStartedFromHub = true;
@@ -3363,6 +3398,8 @@ restartGame = function restartGameAndLobby() {
   latestActionsByPlayerId = new Map();
   startupState.active = false;
   startupState.doneByPlayerId = {};
+  startupState.rollDoneByPlayerId = {};
+  startupState.specRevealedByPlayerId = {};
   startupState.tsRevealedByPlayerId = {};
   startupState.cvsRevealedByPlayerId = {};
   lobbyByClientId.forEach((p) => { p.playerId = null; });

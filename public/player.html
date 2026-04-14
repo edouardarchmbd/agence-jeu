@@ -102,6 +102,35 @@
       .cv .bonus { color: var(--green); font-weight: 700; }
       #actions button { width: 100%; margin-top: 8px; text-align: left; }
       #status { color: var(--text2); font-size: 13px; margin: 8px 0 0; }
+      .startup-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+      .startup-col { text-align: center; }
+      .startup-head {
+        font-size: 9px;
+        color: var(--text2);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 6px;
+      }
+      .startup-reveal {
+        width: 100%;
+        min-height: 138px;
+        border-radius: 10px;
+        cursor: pointer;
+        background: repeating-linear-gradient(45deg,var(--card2),var(--card2) 4px,var(--card) 4px,var(--card) 8px);
+        border: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px;
+        transition: transform 0.6s ease, background 0.3s, border-color 0.3s, box-shadow 0.3s;
+      }
+      .startup-reveal.static { cursor: default; }
+      .startup-foot { margin-top: 10px; }
+      @media (max-width: 760px) {
+        .startup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
     </style>
   </head>
   <body>
@@ -121,12 +150,38 @@
       <div id="startupCard" class="card hidden">
         <div class="label">Tirage de départ (secret)</div>
         <h2 id="startupTitle" style="margin:8px 0 10px">En attente...</h2>
-        <div id="startupContent"></div>
-        <div class="row" style="margin-top:10px">
-          <button id="revealTopSecretBtn" class="secondary">🔓 Révéler Top Secret</button>
-          <button id="revealCVsBtn" class="secondary">👤 Révéler mes CVs</button>
+        <div id="startupContent" class="startup-grid">
+          <div class="startup-col">
+            <div class="startup-head">Capital</div>
+            <div id="startup-capital-card" class="startup-reveal static">
+              <div style="font-size:16px">🎲</div>
+              <div class="meta">Lancer le dé</div>
+            </div>
+            <button id="startupRollBtn" style="margin-top:8px">🎲 Lancer</button>
+          </div>
+          <div class="startup-col">
+            <div class="startup-head">Spécialisation</div>
+            <div id="startup-spec-card" class="startup-reveal">
+              <div style="font-size:16px">🃏</div>
+              <div class="meta">Cliquer</div>
+            </div>
+          </div>
+          <div class="startup-col">
+            <div class="startup-head">Top Secret</div>
+            <div id="startup-ts-card" class="startup-reveal">
+              <div style="font-size:16px">🔒</div>
+              <div class="meta">Cliquer</div>
+            </div>
+          </div>
+          <div class="startup-col">
+            <div class="startup-head">CVs de départ</div>
+            <div id="startup-cvs-card" class="startup-reveal">
+              <div style="font-size:16px">👤</div>
+              <div class="meta">Cliquer</div>
+            </div>
+          </div>
         </div>
-        <button id="startupRollBtn" class="hidden" style="margin-top:10px">🎲 Lancer mon dé de départ</button>
+        <button id="startupReadyBtn" class="hidden startup-foot">C'est parti ! 🚀</button>
       </div>
 
       <div id="gameCard" class="card hidden">
@@ -171,10 +226,12 @@
       const lobbyCard = document.getElementById("lobbyCard");
       const startupCard = document.getElementById("startupCard");
       const startupTitle = document.getElementById("startupTitle");
-      const startupContent = document.getElementById("startupContent");
-      const revealTopSecretBtn = document.getElementById("revealTopSecretBtn");
-      const revealCVsBtn = document.getElementById("revealCVsBtn");
+      const startupCapitalCard = document.getElementById("startup-capital-card");
+      const startupSpecCard = document.getElementById("startup-spec-card");
+      const startupTsCard = document.getElementById("startup-ts-card");
+      const startupCvsCard = document.getElementById("startup-cvs-card");
       const startupRollBtn = document.getElementById("startupRollBtn");
+      const startupReadyBtn = document.getElementById("startupReadyBtn");
       const gameCard = document.getElementById("gameCard");
       const actionsCard = document.getElementById("actionsCard");
       const cvsCard = document.getElementById("cvsCard");
@@ -197,6 +254,14 @@
         return `${Math.round(v / 1000)}k€`;
       }
 
+      function dieSVG(value, size = 52) {
+        const v = value || "?";
+        return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-label="Dé">
+          <rect x="4" y="4" width="56" height="56" rx="10" fill="#fff" stroke="#d6d6e8" stroke-width="3"/>
+          <text x="32" y="40" text-anchor="middle" font-size="28" font-family="Bebas Neue, sans-serif" fill="#151525">${v}</text>
+        </svg>`;
+      }
+
       function send(payload) {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
       }
@@ -217,29 +282,41 @@
         startupCard.classList.toggle("hidden", !startup.active);
         if (!startup.active) return;
 
-        const cvRows = (privateState.cvs || []).map((cv) => `
-          <div class="cv">
-            <div class="role">${cv.role}</div>
-            <div class="meta">${cv.level} · ${cv.contract}</div>
-            <div class="meta"><span class="bonus">+${cv.bonus}</span> ${cv.category}</div>
-          </div>
-        `).join("");
+        startupTitle.textContent = startup.isDone ? "Tirage validé" : "Tirage de départ";
 
-        startupTitle.textContent = startup.isDone
-          ? "Tirage validé"
-          : "Fais ton tirage de départ";
-        startupContent.innerHTML = `
-          <div class="meta">Spécialisation: <b>${privateState.specialisation?.name || "-"}</b></div>
-          <div class="meta">Top Secret: <b>${startup.tsRevealed ? (privateState.topSecret?.name || "-") : "Non révélé"}</b></div>
-          <div class="meta" style="margin-top:8px">CVs de départ :</div>
-          ${startup.cvsRevealed ? (cvRows || "<div class='meta'>Aucun CV.</div>") : "<div class='meta'>Clique sur \"Révéler mes CVs\"</div>"}
-          <div class="meta" style="margin-top:10px">Progression: ${startup.waitingCount || 0}/${startup.totalCount || 0}</div>
-        `;
+        if (startup.rollDone) {
+          startupRollBtn.disabled = true;
+        }
+        startupCapitalCard.innerHTML = startup.startRoll
+          ? `<div>${dieSVG(startup.startRoll, 60)}</div><div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green)">+${fmtEuro(privateState.capital || 0)}</div>`
+          : `<div>${dieSVG(null, 60)}</div><div class="meta">1-2 → 150k€<br>3-4 → 200k€<br>5-6 → 250k€</div>`;
 
-        revealTopSecretBtn.disabled = startup.tsRevealed || startup.isDone;
-        revealCVsBtn.disabled = startup.cvsRevealed || startup.isDone;
-        startupRollBtn.classList.toggle("hidden", startup.isDone || !startup.canRoll);
-        startupRollBtn.disabled = startup.isDone || !startup.canRoll;
+        if (startup.specRevealed) {
+          startupSpecCard.classList.add("static");
+          startupSpecCard.style.background = "linear-gradient(135deg,var(--card2),var(--card))";
+          startupSpecCard.style.borderColor = "var(--orange)";
+          startupSpecCard.style.boxShadow = "0 0 12px rgba(232,131,74,0.3)";
+          startupSpecCard.innerHTML = `<div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--orange)">${privateState.specialisation?.name || "-"}</div><div style="font-size:24px;font-family:'Bebas Neue',sans-serif;color:var(--green)">+${privateState.specialisation?.bonus || 0}</div><div class="meta">${privateState.specialisation?.category || ""}</div>`;
+        }
+
+        if (startup.tsRevealed) {
+          startupTsCard.classList.add("static");
+          startupTsCard.style.background = "linear-gradient(135deg,rgba(240,192,64,0.12),var(--card))";
+          startupTsCard.style.borderColor = "var(--orange)";
+          startupTsCard.style.boxShadow = "0 0 10px rgba(240,192,64,0.2)";
+          startupTsCard.innerHTML = `<div style="font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--orange)">${privateState.topSecret?.name || "-"}</div><div class="meta" style="line-height:1.3">${privateState.topSecret?.text || ""}</div>`;
+        }
+
+        if (startup.cvsRevealed) {
+          startupCvsCard.classList.add("static");
+          startupCvsCard.style.background = "var(--card2)";
+          startupCvsCard.style.borderColor = "var(--border)";
+          startupCvsCard.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px;width:100%">${(privateState.hand || []).map((cv) => `<div style="background:var(--bg2);border-radius:6px;padding:4px 6px;text-align:left"><div style="font-size:11px;font-weight:700">${cv.role}</div><div class="meta">+${cv.bonus} ${cv.category}</div><div class="meta">${cv.level} ${cv.contract}</div></div>`).join("")}</div>`;
+        }
+
+        startupReadyBtn.classList.toggle("hidden", startup.isDone || !startup.canReady);
+        startupReadyBtn.disabled = startup.isDone || !startup.canReady;
+        startupTitle.textContent += ` — ${startup.waitingCount || 0}/${startup.totalCount || 0} prêts`;
       }
 
       function renderGame(privateState) {
@@ -300,15 +377,35 @@
       }
 
       joinBtn.addEventListener("click", joinRoom);
-      revealTopSecretBtn.addEventListener("click", () => {
-        send({ type: "player_action", clientId, action: "startup_reveal_ts" });
+      startupSpecCard.addEventListener("click", () => {
+        if (lastPrivate?.startup?.specRevealed || lastPrivate?.startup?.isDone) return;
+        startupSpecCard.style.transform = "rotateY(90deg)";
+        setTimeout(() => {
+          startupSpecCard.style.transform = "rotateY(0deg)";
+          send({ type: "player_action", clientId, action: "startup_reveal_spec" });
+        }, 300);
       });
-      revealCVsBtn.addEventListener("click", () => {
+      startupTsCard.addEventListener("click", () => {
+        if (lastPrivate?.startup?.tsRevealed || lastPrivate?.startup?.isDone) return;
+        startupTsCard.style.transform = "rotateY(90deg)";
+        setTimeout(() => {
+          startupTsCard.style.transform = "rotateY(0deg)";
+          send({ type: "player_action", clientId, action: "startup_reveal_ts" });
+        }, 300);
+      });
+      startupCvsCard.addEventListener("click", () => {
+        if (lastPrivate?.startup?.cvsRevealed || lastPrivate?.startup?.isDone) return;
         send({ type: "player_action", clientId, action: "startup_reveal_cvs" });
       });
       startupRollBtn.addEventListener("click", () => {
-        send({ type: "player_action", clientId, action: "startup_roll" });
+        if (lastPrivate?.startup?.rollDone || lastPrivate?.startup?.isDone) return;
+        send({ type: "player_action", clientId, action: "startup_roll_die" });
         startupRollBtn.disabled = true;
+      });
+      startupReadyBtn.addEventListener("click", () => {
+        if (!lastPrivate?.startup?.canReady || lastPrivate?.startup?.isDone) return;
+        send({ type: "player_action", clientId, action: "startup_ready" });
+        startupReadyBtn.disabled = true;
       });
 
       ws.addEventListener("open", () => {
