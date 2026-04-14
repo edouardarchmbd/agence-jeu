@@ -2629,28 +2629,88 @@ function startAO() {
   G.aoPreConfirmed = {};
   G.aoAwaitingWinnerContinue = false;
   G.aoWinnerId = null;
+  G.aoRollQueue = [];
+  G.aoRollCat = card.cats[0];
+  G.aoRollIsA = isACase;
 
   addLog(`📋 AO : <strong>${card.client}</strong> — ${card.mission} (${fmt(card.gain)})`);
-  const activePlayers = G.players.filter(p => !p.bankrupt);
-  activePlayers.forEach((player) => {
-    const cat = card.cats[0];
-    const freelances = player.hand
-      .map((cv, i) => ({ cv, i }))
-      .filter(({ cv }) => cv.contract === 'Freelance' && cv.category === cat && !(cv.alternant && !isACase))
-      .map(({ cv, i }) => ({ idx: i, role: cv.role, category: cv.category, bonus: cv.bonus }));
+  showAOPreHubModal();
+  sendAOPrePhaseToPhones();
+}
+
+function aoParticipants() {
+  return (G.aoTiedPlayerIds
+    ? G.players.filter((p) => G.aoTiedPlayerIds.includes(p.id))
+    : G.players
+  ).filter((p) => !p.bankrupt);
+}
+
+function getAOPreForces(player) {
+  const CATS = ['Stratégie', 'Graphisme', 'Conception', 'Média', 'Développement'];
+  const isA = G.currentAOisA;
+  const forces = {};
+  CATS.forEach((cat) => {
+    forces[cat] = getCVBonus(player, cat, isA);
+  });
+  return forces;
+}
+
+function getAOFreelancesForFirstCat(player) {
+  const firstCat = G.currentAO?.cats?.[0];
+  if (!firstCat) return [];
+  return player.hand
+    .map((cv, idx) => ({ cv, idx }))
+    .filter(({ cv }) => cv.contract === 'Freelance' && cv.category === firstCat && !(cv.alternant && !G.currentAOisA))
+    .map(({ cv, idx }) => ({
+      idx,
+      role: cv.role,
+      category: cv.category,
+      bonus: cv.bonus
+    }));
+}
+
+function getAOTopSecretForPlayer(player) {
+  if (player.topSecretUsed) return null;
+  const ts = player.topSecret;
+  if (!ts) return null;
+  if (ts.effect !== 'win_ao' && ts.effect !== 'plus6_ao') return null;
+  return { name: ts.name, text: ts.text };
+}
+
+function showAOPreHubModal() {
+  const card = G.currentAO;
+  const participants = aoParticipants();
+  const confirmed = participants.filter((p) => G.aoPreConfirmed[p.id]).length;
+  showModal(
+    `📋 AO — ${card.client}`,
+    card.mission,
+    `<div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1">${aoCardHTML(card, G.currentAOisA)}</div>
+      <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em">Pré-phase</div>
+        <div id="ao-waiting-count" style="font-family:'Bebas Neue',sans-serif;font-size:30px;color:var(--orange);margin-top:8px">
+          En attente des joueurs... ${confirmed}/${participants.length} confirmés
+        </div>
+      </div>
+    </div>`,
+    []
+  );
+}
+
+function sendAOPrePhaseToPhones() {
+  const participants = aoParticipants();
+  const firstCat = G.currentAO.cats[0];
+  participants.forEach((player) => {
     sendPlayerAction(player.id, {
       id: 'ao-pre-phase',
       type: 'ao_pre_phase',
-      label: '📋 Préparation AO',
-      aoCard: card,
-      isA: isACase,
-      playerForces: getCVBonus(player, cat, isACase),
-      freelances,
-      topSecret: player.topSecret,
-      topSecretUsed: player.topSecretUsed
+      client: G.currentAO.client,
+      firstCat,
+      forces: getAOPreForces(player),
+      freelances: getAOFreelancesForFirstCat(player),
+      topSecret: getAOTopSecretForPlayer(player)
     });
   });
-  addLog(`📨 AO envoyé aux téléphones : attente des confirmations (${activePlayers.length}).`);
   syncPhonesWithGame();
 }
 
@@ -2696,11 +2756,11 @@ function playerForcesHTML(player, card, isA) {
 }
 
 function showNextAOPreModal() {
-  // Deprecated: AO pre-phase is now fully phone-driven.
+  // Deprecated
 }
 
 function confirmAOPre(playerId, cvIndices) {
-  // Deprecated: AO pre-phase is now fully phone-driven.
+  // Deprecated
 }
 
 // Keep old functions as stubs for safety
@@ -2714,6 +2774,8 @@ function runAOCategory() {
   const isA = G.currentAOisA;
   const catIdx = G.aoCategory;
   const cat = card.cats[catIdx];
+  G.aoRollCat = cat;
+  G.aoRollIsA = isA;
 
   // Pot-de-vin : victoire automatique
   const potWinner = G.players.find(p => p.potDeBvin && !p.bankrupt);
@@ -2726,60 +2788,90 @@ function runAOCategory() {
         <div style="font-size:14px;color:var(--text2);margin-bottom:8px">🤫 Pot-de-vin activé</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--green)">🏆 ${potWinner.name}<br>+${fmt(card.gain)}</div>
       </div>`,
-      [{label:'Continuer', cls:'btn-primary', fn:'closeAO()'}]);
+      []);
+    sendPlayerAction(potWinner.id, {
+      id: 'ao-winner-continue',
+      type: 'ao_winner_continue',
+      label: '🏆 Continuer',
+      action: 'ao_winner_continue'
+    });
+    G.aoWinnerId = potWinner.id;
+    G.aoAwaitingWinnerContinue = true;
     return;
   }
 
-  const activePlayers = (G.aoTiedPlayerIds
-    ? G.players.filter(p => G.aoTiedPlayerIds.includes(p.id))
-    : G.players
-  ).filter(p => !p.bankrupt);
-
-  // Roll each player sequentially on center, collect scores, then show results.
-  G.aoRollQueue = activePlayers.map(p => ({ player: p, die: null, cvBonus: 0, extra: 0, total: 0 }));
-  G.aoRollCat = cat;
-  G.aoRollIsA = isA;
+  const activePlayers = aoParticipants();
+  G.aoRollQueue = activePlayers.map((p) => ({
+    player: p,
+    die: null,
+    cvBonus: getCVBonus(p, cat, isA),
+    extra: p.plus6AO ? 6 : 0,
+    total: null
+  }));
+  showAORollHubModal();
   rollNextAOPlayer();
+}
+
+function showAORollHubModal() {
+  const rows = (G.aoRollQueue || []).map((s) => `
+    <div class="ao-score-row">
+      <span>${s.player.name}</span>
+      <span>${s.die === null ? '—' : s.die}</span>
+      <span>+${s.cvBonus}${s.extra ? ` (+${s.extra})` : ''}</span>
+      <span class="ao-score-val">${s.total === null ? '—' : s.total}</span>
+    </div>
+  `).join('');
+  showModal(
+    `📋 AO — ${G.currentAO.client}`,
+    `Catégorie : ${G.aoRollCat}`,
+    `<div class="ao-scores">${rows}</div>`,
+    []
+  );
 }
 
 function rollNextAOPlayer() {
   const remaining = G.aoRollQueue.filter(s => s.die === null);
   if (remaining.length === 0) {
-    // All rolled — compute and show results
     resolveAOScores();
     return;
   }
   const entry = remaining[0];
   const p = entry.player;
-  const cat = G.aoRollCat;
-  const cvBonus = getCVBonus(p, cat, G.aoRollIsA);
-  const extra = p.plus6AO ? 6 : 0;
-
-  sendPlayerAction(p.id, {
-    id: 'ao-roll-turn',
-    type: 'ao_roll_turn',
-    label: `🎲 AO ${G.currentAO.client} — Lance le dé`,
-    category: cat,
-    cvBonus,
-    extra,
-    playerId: p.id
+  const participants = aoParticipants();
+  participants.forEach((pl) => {
+    if (pl.id === p.id) {
+      sendPlayerAction(pl.id, {
+        id: 'ao-roll-turn',
+        type: 'ao_roll_turn',
+        label: `🎲 Lancer mon dé — ${G.aoRollCat}`,
+        category: G.aoRollCat,
+        cvBonus: entry.cvBonus,
+        extra: entry.extra,
+        playerId: pl.id
+      });
+      return;
+    }
+    sendPlayerAction(pl.id, {
+      id: 'ao-wait-turn',
+      type: 'ao_wait_turn',
+      label: `⏳ En attente de ${p.name}...`,
+      playerName: p.name
+    });
   });
 }
 
 function rollAODie(playerId) {
   const entry = G.aoRollQueue.find(s => s.player.id === playerId);
+  if (!entry || entry.die !== null) return;
   const p = entry.player;
-  const cat = G.aoRollCat;
-  const cvBonus = getCVBonus(p, cat, G.aoRollIsA);
-  const extra = p.plus6AO ? 6 : 0;
+  const cvBonus = entry.cvBonus;
+  const extra = entry.extra;
   if (p.plus6AO) p.plus6AO = false;
 
-  closeModal();
-  rollOnCenter(1, `AO — ${cat}`, p.name, p.color, ([die]) => {
+  rollOnCenter(1, `AO — ${G.aoRollCat}`, p.name, p.color, ([die]) => {
     entry.die = die;
-    entry.cvBonus = cvBonus;
-    entry.extra = extra;
     entry.total = die + cvBonus + extra;
+    showAORollHubModal();
     setTimeout(() => rollNextAOPlayer(), 800);
   });
 }
@@ -2788,59 +2880,110 @@ function resolveAOScores() {
   const card = G.currentAO;
   const cat = G.aoRollCat;
   const scores = G.aoRollQueue;
-
-  const allScores = G.players.filter(p => !p.bankrupt).map(p => {
-    const s = scores.find(s => s.player.id === p.id);
-    return s || { player: p, die: '-', cvBonus: '-', extra: 0, total: '-', eliminated: true };
-  });
-
   const max = Math.max(...scores.map(s => s.total));
   const winners = scores.filter(s => s.total === max);
+  const allScores = scores
+    .map((s) => ({
+      playerId: s.player.id,
+      playerName: s.player.name,
+      total: s.total,
+      die: s.die,
+      cvBonus: s.cvBonus,
+      extra: s.extra
+    }))
+    .sort((a, b) => b.total - a.total);
 
   if (winners.length === 1) {
-    G.aoTiedPlayerIds = null;
     const winner = winners[0].player;
     winner.capital += card.gain;
-    G.aoWinnerId = winner.id;
-    G.aoAwaitingWinnerContinue = true;
     addLog(`<span class="log-player" style="color:${winner.color}">${winner.name}</span> remporte l'AO <strong>${card.client}</strong> : <span class="log-amount gain">+${fmt(card.gain)}</span>`);
+    showModal(
+      `📋 AO — ${card.client}`,
+      card.mission,
+      `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text2);margin-bottom:8px">Catégorie : <strong style="color:white">${cat}</strong></div>
+      <div class="ao-scores">
+        ${allScores.map((s) => `
+          <div class="ao-score-row ${s.playerId === winner.id ? 'winner' : ''}">
+            <span>${s.playerName}</span>
+            <span>dé ${s.die} + CV ${s.cvBonus}${s.extra ? ` + ⚡${s.extra}` : ''}</span>
+            <span class="ao-score-val">${s.total}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-top:12px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green)">
+        🏆 ${winner.name} gagne ${fmt(card.gain)} !
+      </div>`,
+      []
+    );
     hubSend({
       type: 'ao_result',
       winnerId: winner.id,
       winnerName: winner.name,
       gain: card.gain,
-      card
+      scores: allScores
     });
     sendPlayerAction(winner.id, {
       id: 'ao-winner-continue',
       type: 'ao_winner_continue',
-      label: 'Continuer',
+      label: '🏆 Continuer',
       action: 'ao_winner_continue'
     });
-  } else if (G.aoCategory < card.cats.length - 1) {
-    G.aoCategory++;
-    G.aoTiedPlayerIds = winners.map(w => w.player.id);
-    const tiedNames = winners.map(w => w.player.name).join(', ');
-    addLog(`Égalité entre ${tiedNames} → catégorie suivante : ${card.cats[G.aoCategory]}`);
-    runAOCategory();
-  } else {
-    G.aoTiedPlayerIds = null;
-    addLog(`AO ${card.client} : égalité totale, carte perdue.`);
-    hubSend({
-      type: 'ao_result',
-      winnerId: null,
-      winnerName: null,
-      gain: 0,
-      card
-    });
-    closeAO();
+    G.aoWinnerId = winner.id;
+    G.aoAwaitingWinnerContinue = true;
+    return;
   }
+
+  if (G.aoCategory < card.cats.length - 1) {
+    G.aoCategory += 1;
+    G.aoTiedPlayerIds = winners.map((w) => w.player.id);
+    addLog(`AO égalité → relance sur ${card.cats[G.aoCategory]} avec ${winners.map((w) => w.player.name).join(', ')}`);
+    runAOCategory();
+    return;
+  }
+
+  G.aoTiedPlayerIds = null;
+  addLog(`AO ${card.client} : égalité totale, carte perdue.`);
+  showModal(
+    `😤 Égalité totale`,
+    `Personne ne remporte l'AO ${card.client}.`,
+    `<div style="color:var(--text2);font-size:13px">La carte est défaussée. L'AO est perdu pour tout le monde.</div>`,
+    []
+  );
+  hubSend({
+    type: 'ao_result',
+    winnerId: null,
+    winnerName: null,
+    gain: 0,
+    scores: allScores
+  });
+  setTimeout(() => closeAO(), 300);
 }
 
 function closeAO() {
   removeUsedFreelances();
   closeModal();
+  G.aoAwaitingWinnerContinue = false;
+  G.aoWinnerId = null;
   if (!checkWin()) endTurn();
+}
+
+function legacy_rollNextAOPlayer() {
+  const remaining = G.aoRollQueue.filter(s => s.die === null);
+  if (remaining.length === 0) {
+    resolveAOScores();
+    return;
+  }
+  const entry = remaining[0];
+  const p = entry.player;
+  sendPlayerAction(p.id, {
+    id: 'ao-roll-turn',
+    type: 'ao_roll_turn',
+    label: `🎲 AO ${G.currentAO.client} — Lance le dé`,
+    category: G.aoRollCat,
+    cvBonus: entry.cvBonus,
+    extra: entry.extra,
+    playerId: p.id
+  });
 }
 
 // ── TOP SECRET ──

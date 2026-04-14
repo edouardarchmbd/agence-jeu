@@ -10,9 +10,12 @@
       :root {
         --orange: #e8834a;
         --green: #4caf7d;
+        --red: #e05252;
+        --yellow: #f0c040;
         --blue: #3a7bd5;
         --bg: #0f0f1a;
         --bg2: #17172a;
+        --bg3: #1e1e32;
         --card: #23233a;
         --card2: #2b2b47;
         --text: #e8e8f0;
@@ -102,6 +105,42 @@
       .cv .bonus { color: var(--green); font-weight: 700; }
       #actions button { width: 100%; margin-top: 8px; text-align: left; }
       #status { color: var(--text2); font-size: 13px; margin: 8px 0 0; }
+      .ao-scores { display: flex; flex-direction: column; gap: 8px; }
+      .ao-score-row {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 10px;
+        align-items: center;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 12px;
+      }
+      .ao-score-val {
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 22px;
+        color: var(--green);
+      }
+      .force-bar {
+        position: relative;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        overflow: hidden;
+        margin-bottom: 6px;
+      }
+      .force-bar-fill {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(76,175,125,0.2), rgba(58,123,213,0.05));
+        transform-origin: left center;
+      }
+      .force-bar-label, .force-bar-value { position: relative; z-index: 1; }
+      .force-bar-label { color: var(--text2); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+      .force-bar-value { font-family: "Bebas Neue", sans-serif; font-size: 26px; line-height: 1; }
+      .force-bar.is-spec { border-color: var(--orange); }
       .startup-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
       .startup-col { text-align: center; }
       .startup-head {
@@ -529,14 +568,22 @@
             aoPreState = payload.actionData;
             aoRollState = null;
             aoWinnerPending = false;
-            const c = aoPreState.aoCard;
+            const c = aoPreState;
             aoContent.innerHTML = `
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                 <div>
-                  <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--orange)">${c.client}</div>
-                  <div class="meta">${c.mission}</div>
-                  <div class="meta" style="margin-top:8px">Catégorie active: <b>${c.cats[0]}</b></div>
-                  <div class="meta">Gain: <b>${fmtEuro(c.gain)}</b></div>
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--orange)">📋 AO — ${c.client}</div>
+                  <div class="meta" style="margin-top:8px;border:1px solid var(--orange);border-radius:8px;padding:6px;color:var(--orange)">
+                    1ère catégorie : <b>${c.firstCat}</b>
+                  </div>
+                  <div class="meta" style="margin-top:8px">Mes forces</div>
+                  ${["Stratégie","Graphisme","Conception","Média","Développement"].map((cat) => `
+                    <div class="force-bar ${cat === c.firstCat ? "is-spec" : ""}">
+                      <div class="force-bar-fill" style="transform:scaleX(${Math.min((Number(c.forces?.[cat] || 0) + 1) / 8, 1)})"></div>
+                      <div class="force-bar-label">${cat}</div>
+                      <div class="force-bar-value">+${Number(c.forces?.[cat] || 0)}</div>
+                    </div>
+                  `).join("")}
                 </div>
                 <div>
                   <div class="meta" style="margin-bottom:6px">Freelances disponibles</div>
@@ -546,10 +593,12 @@
                       <span>${f.role} (+${f.bonus} ${f.category})</span>
                     </label>
                   `).join("") || "<div class='meta'>Aucun freelance.</div>"}
-                  <label class="meta" style="display:flex;gap:6px;align-items:center;margin-top:8px">
-                    <input id="ao-ts-use" type="checkbox" ${aoPreState.topSecretUsed ? "disabled" : ""} />
-                    <span>Top Secret: ${aoPreState.topSecret?.name || "-"}</span>
-                  </label>
+                  ${aoPreState.topSecret ? `
+                    <label class="meta" style="display:flex;gap:6px;align-items:center;margin-top:8px;padding:8px;border:1px solid var(--yellow);border-radius:8px;color:var(--yellow)">
+                      <input id="ao-ts-use" type="checkbox" />
+                      <span><b>${aoPreState.topSecret.name}</b><br>${aoPreState.topSecret.text}</span>
+                    </label>
+                  ` : "<div class='meta' style='margin-top:8px'>Pas de Top Secret AO disponible.</div>"}
                 </div>
               </div>
             `;
@@ -575,6 +624,14 @@
             aoWinnerContinueBtn.disabled = false;
             aoConfirmBtn.classList.add("hidden");
             aoRollBtn.classList.add("hidden");
+          } else if (payload.actionData.type === "ao_wait_turn") {
+            aoPreState = null;
+            aoRollState = null;
+            aoWinnerPending = false;
+            aoContent.innerHTML = `<div class="meta">⏳ En attente de ${payload.actionData.playerName}...</div>`;
+            aoConfirmBtn.classList.add("hidden");
+            aoRollBtn.classList.add("hidden");
+            aoWinnerContinueBtn.classList.add("hidden");
           }
           if (lastPrivate) renderGame(lastPrivate);
           return;
