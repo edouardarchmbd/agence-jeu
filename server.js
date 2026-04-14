@@ -4,7 +4,10 @@ const express = require("express");
 const WebSocket = require("ws");
 const QRCode = require("qrcode");
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const PUBLIC_BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : `http://localhost:${PORT}`;
 const app = express();
 const rooms = new Map();
 
@@ -82,7 +85,7 @@ function removeFromRoom(ws) {
   ws.role = null;
 }
 
-wss.on("connection", (ws, req) => {
+wss.on("connection", (ws) => {
   ws.roomCode = null;
   ws.role = null;
 
@@ -108,8 +111,7 @@ wss.on("connection", (ws, req) => {
       ws.roomCode = code;
       ws.role = "hub";
 
-      const host = req.headers.host || `localhost:${PORT}`;
-      const joinUrl = `http://${host}/player.html?room=${code}`;
+      const joinUrl = `${PUBLIC_BASE_URL}/player.html?room=${code}`;
       const qrDataUrl = await QRCode.toDataURL(joinUrl);
 
       send(ws, {
@@ -170,5 +172,5 @@ wss.on("connection", (ws, req) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Serveur Agence actif sur http://localhost:${PORT}`);
+  console.log(`Serveur Agence actif sur ${PUBLIC_BASE_URL}`);
 });
