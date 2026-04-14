@@ -4,7 +4,7 @@ const express = require("express");
 const WebSocket = require("ws");
 const QRCode = require("qrcode");
 
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT, 10) || 3000;
 const PUBLIC_BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
   ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   : `http://localhost:${PORT}`;
@@ -172,6 +172,8 @@ wss.on("connection", (ws) => {
     removeFromRoom(ws);
   });
 });
+
+console.log(`Démarrage sur port ${PORT}, type: ${typeof PORT}`);
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Serveur Agence actif sur ${PUBLIC_BASE_URL}`);
