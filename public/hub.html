@@ -1,83 +1,3272 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Agence - Hub</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 2rem;
-      }
-      #qr {
-        width: 260px;
-        height: 260px;
-        border: 1px solid #ddd;
-        display: block;
-      }
-      pre {
-        background: #f7f7f7;
-        padding: 1rem;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>Agence - Hub</h1>
-    <p>Code room: <strong id="room-code">...</strong></p>
-    <img id="qr" alt="QR code de connexion joueur" />
-    <p>Lien joueur: <a id="join-link" href="#" target="_blank" rel="noreferrer"></a></p>
-    <h2>Evenements</h2>
-    <pre id="log"></pre>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGENCE — Le Jeu</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap');
 
-    <script>
-      const roomCodeEl = document.getElementById("room-code");
-      const qrEl = document.getElementById("qr");
-      const joinLinkEl = document.getElementById("join-link");
-      const logEl = document.getElementById("log");
+  :root {
+    --orange: #E8834A;
+    --orange-dark: #C0622A;
+    --blue: #3A7BD5;
+    --blue-light: #5A9BF5;
+    --green: #4CAF7D;
+    --red: #E05252;
+    --yellow: #F0C040;
+    --gray: #8A8A9A;
+    --gray-light: #C8C8D8;
+    --bg: #0F0F1A;
+    --bg2: #161625;
+    --bg3: #1E1E32;
+    --card: #242438;
+    --card2: #2C2C48;
+    --text: #E8E8F0;
+    --text2: #9898B0;
+    --border: #32324A;
+  }
 
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-      function log(message) {
-        const line = `[${new Date().toLocaleTimeString()}] ${message}`;
-        logEl.textContent = `${line}\n${logEl.textContent}`;
-      }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
 
-      ws.addEventListener("open", () => {
-        ws.send(JSON.stringify({ type: "create_room" }));
+  /* ── SCREENS ── */
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ── SETUP SCREEN ── */
+  #setup {
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    background: radial-gradient(ellipse at 30% 20%, rgba(232,131,74,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 80%, rgba(58,123,213,0.10) 0%, transparent 60%),
+                var(--bg);
+  }
+
+  .setup-inner { max-width: 560px; width: 100%; }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(64px, 15vw, 120px);
+    letter-spacing: 0.06em;
+    line-height: 0.9;
+    color: var(--orange);
+    text-shadow: 0 0 60px rgba(232,131,74,0.3);
+    margin-bottom: 8px;
+  }
+
+  .tagline {
+    color: var(--text2);
+    font-size: 14px;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 48px;
+  }
+
+  .setup-section { margin-bottom: 32px; }
+
+  .setup-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 12px;
+  }
+
+  .player-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .player-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+
+  .player-color {
+    width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .player-name-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+  }
+
+  .player-name-input::placeholder { color: var(--text2); }
+
+  .btn-remove {
+    background: none; border: none; color: var(--text2);
+    cursor: pointer; font-size: 18px; line-height: 1;
+    padding: 2px 4px;
+    transition: color 0.2s;
+  }
+  .btn-remove:hover { color: var(--red); }
+
+  .btn-add {
+    background: var(--card);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text2);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    width: 100%;
+  }
+  .btn-add:hover { border-color: var(--orange); color: var(--orange); }
+
+  .objective-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .objective-row input[type=range] {
+    flex: 1;
+    accent-color: var(--orange);
+    cursor: pointer;
+  }
+
+  .objective-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: var(--orange);
+    min-width: 90px;
+    text-align: right;
+  }
+
+  .btn-start {
+    width: 100%;
+    background: var(--orange);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 18px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  .btn-start:hover { background: var(--orange-dark); transform: translateY(-1px); }
+
+  /* ── GAME SCREEN ── */
+  #game {
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .game-topbar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .game-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    color: var(--orange);
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+  }
+
+  .players-bar {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+    flex-wrap: wrap;
+  }
+
+  .player-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px 5px 8px;
+    font-size: 13px;
+    transition: all 0.3s;
+  }
+
+  .player-chip.active {
+    border-color: var(--orange);
+    background: rgba(232,131,74,0.12);
+  }
+
+  .player-chip-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .player-chip-name { font-weight: 500; }
+
+  .player-chip-money {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 15px;
+    color: var(--green);
+    margin-left: 4px;
+  }
+
+  .player-chip-money.negative { color: var(--red); }
+
+  /* ── BOARD ── */
+  .game-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 0;
+    overflow: hidden;
+    max-height: calc(100vh - 64px);
+  }
+
+  .board-area {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    gap: 3px;
+    width: min(560px, 100%);
+    aspect-ratio: 1;
+  }
+
+  .cell {
+    border-radius: 6px;
+    padding: 5px;
+    font-size: 9px;
+    font-weight: 500;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    cursor: default;
+    transition: transform 0.15s;
+    min-height: 0;
+  }
+
+  .cell-center {
+    grid-column: 2 / 8;
+    grid-row: 2 / 8;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .center-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(14px, 3vw, 22px);
+    color: var(--orange);
+    letter-spacing: 0.1em;
+    text-align: center;
+  }
+
+  .center-pot {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(18px, 4vw, 32px);
+    color: var(--yellow);
+  }
+
+  .center-pot-label {
+    font-size: 10px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .cell-type { font-size: 8px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.75; }
+  .cell-day { font-size: 7px; opacity: 0.5; margin-top: auto; }
+
+  .cell.depart { background: #2A1F0A; border: 1px solid var(--orange); }
+  .cell.hasard { background: #0A1535; border: 1px solid #2A4080; }
+  .cell.cv { background: #2A2A08; border: 1px solid #6A6A20; }
+  .cell.brief { background: #2A0A0A; border: 1px solid #802020; }
+  .cell.ao { background: #0A2A14; border: 1px solid #206040; }
+  .cell.ao-a { background: #0A2A14; border: 1px solid #20A050; }
+  .cell.repos { background: var(--bg3); border: 1px solid var(--border); }
+  .cell.tva { background: #2A1A08; border: 1px solid #804010; }
+  .cell.tva-remb { background: #1A2A08; border: 1px solid #408020; }
+
+  .cell-pions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    z-index: 5;
+  }
+
+  .pion {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.6);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 800;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    cursor: default;
+  }
+
+  .pion:hover { transform: scale(1.3); }
+
+  .pion.landing {
+    animation: pionLand 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  @keyframes pionLand {
+    0%   { transform: scale(0) translateY(-8px); opacity: 0; }
+    60%  { transform: scale(1.3) translateY(0); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  .a-badge {
+    position: absolute;
+    top: 3px; right: 4px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 11px;
+    color: var(--red);
+  }
+
+  /* ── SIDE PANEL ── */
+  .side-panel {
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .side-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .side-tab {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    color: var(--text2);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+  }
+
+  .side-tab.active {
+    color: var(--orange);
+    border-bottom-color: var(--orange);
+  }
+
+  .side-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  .side-content::-webkit-scrollbar { width: 4px; }
+  .side-content::-webkit-scrollbar-track { background: transparent; }
+  .side-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── CURRENT PLAYER BOX ── */
+  .current-player-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .current-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+
+  .current-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .current-money {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    margin-top: 4px;
+  }
+
+  .current-money.positive { color: var(--green); }
+  .current-money.negative { color: var(--red); }
+
+  .cv-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+
+  .cv-chip {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .cv-chip-type { opacity: 0.6; }
+  .cv-chip-bonus { color: var(--green); font-weight: 600; }
+  .cv-chip-cost { color: var(--orange); font-size: 9px; }
+
+  /* ── ACTION AREA ── */
+  .action-area {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .action-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.05em;
+    color: var(--orange);
+    margin-bottom: 10px;
+  }
+
+  .action-desc {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 6px;
+  }
+
+  .btn-primary { background: var(--orange); color: white; }
+  .btn-primary:hover { background: var(--orange-dark); transform: translateY(-1px); }
+  .btn-secondary { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--orange); color: var(--orange); }
+  .btn-danger { background: rgba(224,82,82,0.15); color: var(--red); border: 1px solid rgba(224,82,82,0.3); }
+  .btn-danger:hover { background: rgba(224,82,82,0.25); }
+  .btn-green { background: var(--green); color: white; }
+  .btn-green:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* ── DIE ── */
+  .die-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .die-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .die-svg {
+    width: 56px; height: 56px;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+    transition: transform 0.1s;
+  }
+
+  .die-svg.rolling {
+    animation: dieShake 0.6s ease-in-out;
+  }
+
+  @keyframes dieShake {
+    0%   { transform: rotate(0deg) scale(1); }
+    10%  { transform: rotate(-20deg) scale(1.15) translateY(-4px); }
+    25%  { transform: rotate(18deg) scale(1.1) translateY(-8px); }
+    40%  { transform: rotate(-14deg) scale(1.12) translateY(-5px); }
+    55%  { transform: rotate(10deg) scale(1.08) translateY(-3px); }
+    70%  { transform: rotate(-6deg) scale(1.04) translateY(-1px); }
+    85%  { transform: rotate(3deg) scale(1.02); }
+    100% { transform: rotate(0deg) scale(1); }
+  }
+
+  .die-total {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    color: var(--orange);
+    line-height: 1;
+  }
+
+  .die-plus {
+    font-size: 22px;
+    color: var(--text2);
+    margin-top: 16px;
+  }
+
+  .die-equals {
+    font-size: 18px;
+    color: var(--text2);
+    margin-top: 16px;
+  }
+
+  /* ── CENTER DICE OVERLAY ── */
+  .center-dice-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(15,15,26,0.88);
+    border-radius: 10px;
+    z-index: 10;
+    transition: opacity 0.8s ease;
+    pointer-events: none;
+  }
+
+  .center-dice-overlay.fade-out { opacity: 0; }
+
+  .center-dice-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .center-die {
+    width: 64px; height: 64px;
+    filter: drop-shadow(0 6px 16px rgba(232,131,74,0.5));
+  }
+
+  .center-die.rolling {
+    animation: dieShake 0.6s ease-in-out;
+  }
+
+  .center-dice-total {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    color: var(--orange);
+    text-shadow: 0 0 20px rgba(232,131,74,0.6);
+    line-height: 1;
+  }
+
+  .center-dice-label {
+    font-size: 12px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    text-align: center;
+  }
+
+  .center-dice-player {
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .log-entry {
+    font-size: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    line-height: 1.5;
+    color: var(--text2);
+  }
+
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry .log-player { font-weight: 600; }
+  .log-amount.gain { color: var(--green); font-weight: 600; }
+  .log-amount.loss { color: var(--red); font-weight: 600; }
+
+  /* ── CARDS DISPLAY ── */
+  .card-display {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+
+  .card-display-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .card-display-sub {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 8px;
+  }
+
+  .ao-cats { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+  .ao-cat { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 4px 8px; background: var(--bg3); border-radius: 5px; }
+  .ao-cat-rank { color: var(--text2); }
+  .ao-cat-name { font-weight: 500; }
+  .ao-cat-score { font-family: 'Bebas Neue', sans-serif; font-size: 16px; color: var(--blue-light); }
+
+  .ao-scores { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .ao-score-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 6px 10px; border-radius: 6px; background: var(--bg3); }
+  .ao-score-row.winner { background: rgba(76,175,125,0.15); border: 1px solid rgba(76,175,125,0.3); }
+  .ao-score-val { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--orange); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .modal-overlay.active { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 460px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    transform: translateY(20px);
+    transition: transform 0.2s;
+  }
+
+  .modal-overlay.active .modal { transform: translateY(0); }
+
+  .modal-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 0.05em;
+    color: var(--orange);
+    margin-bottom: 6px;
+  }
+
+  .modal-sub {
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+
+  .modal-body { margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 8px; flex-direction: column; }
+
+  /* ── WIN SCREEN ── */
+  #win {
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at 50% 30%, rgba(232,131,74,0.2) 0%, transparent 60%), var(--bg);
+    text-align: center;
+    padding: 40px 20px;
+  }
+
+  .win-emoji { font-size: 80px; margin-bottom: 20px; }
+  .win-title { font-family: 'Bebas Neue', sans-serif; font-size: 72px; color: var(--orange); letter-spacing: 0.05em; }
+  .win-name { font-family: 'Bebas Neue', sans-serif; font-size: 48px; color: white; margin-bottom: 8px; }
+  .win-amount { font-family: 'Bebas Neue', sans-serif; font-size: 36px; color: var(--green); margin-bottom: 32px; }
+
+  /* ── COLORS ── */
+  .c0 { background: #E05252; }
+  .c1 { background: #3A7BD5; }
+  .c2 { background: #4CAF7D; }
+  .c3 { background: #F0C040; }
+  .c4 { background: #A855F7; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── FORCE BARS ── */
+  .force-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .force-bar {
+    background: var(--card2);
+    border-radius: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .force-bar.is-spec {
+    border-color: var(--orange);
+    box-shadow: 0 0 8px rgba(232,131,74,0.2);
+  }
+
+  .force-bar-fill {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(232,131,74,0.15), transparent);
+    transform-origin: left;
+    transition: transform 0.4s ease;
+  }
+
+  .force-bar.is-spec .force-bar-fill {
+    background: linear-gradient(90deg, rgba(232,131,74,0.25), transparent);
+  }
+
+  .force-bar-label {
+    font-size: 10px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    position: relative;
+  }
+
+  .force-bar-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: var(--text);
+    line-height: 1;
+    position: relative;
+  }
+
+  .force-bar.is-spec .force-bar-value { color: var(--orange); }
+
+  .force-spec-badge {
+    position: absolute;
+    top: 4px; right: 6px;
+    font-size: 9px;
+    color: var(--orange);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── SPEC CARD FLIP ── */
+  .spec-flip-container {
+    perspective: 600px;
+    margin-bottom: 10px;
+  }
+
+  .spec-flip-card {
+    width: 100%;
+    height: 80px;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.4,0,0.2,1);
+    cursor: pointer;
+  }
+
+  .spec-flip-card.flipped { transform: rotateY(180deg); }
+
+  .spec-flip-front, .spec-flip-back {
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    backface-visibility: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .spec-flip-front {
+    background: repeating-linear-gradient(
+      45deg, var(--card2), var(--card2) 4px, var(--card) 4px, var(--card) 8px
+    );
+    border: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text2);
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .spec-flip-back {
+    background: linear-gradient(135deg, var(--card2), var(--card));
+    border: 1px solid var(--orange);
+    transform: rotateY(180deg);
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+  }
+
+  /* ── PION MOVING ── */
+  .pion.moving {
+    animation: pionMove 0.2s ease-in-out;
+  }
+
+  @keyframes pionMove {
+    0%   { transform: scale(1.4) translateY(-4px); }
+    100% { transform: scale(1) translateY(0); }
+  }
+  @media (max-width: 700px) {
+    .game-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; max-height: none; overflow: visible; }
+    .board-area { max-height: 50vw; min-height: 300px; }
+    .side-panel { border-left: none; border-top: 1px solid var(--border); }
+  }
+
+  .secret-card {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 10px;
+  }
+  .secret-title { font-family: 'Bebas Neue'; font-size: 16px; color: var(--yellow); }
+  .secret-desc { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .secret-used { opacity: 0.4; text-decoration: line-through; }
+
+  .spec-card {
+    background: var(--card2);
+    border: 1px solid var(--blue);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .spec-title { font-family: 'Bebas Neue'; font-size: 16px; color: var(--blue-light); }
+  .spec-desc { font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════ SETUP ══ -->
+<div id="setup" class="screen active">
+  <div class="setup-inner">
+    <div class="logo">AGENCE</div>
+    <div class="tagline">Le jeu des agences de communication</div>
+
+    <div class="setup-section">
+      <div class="setup-label">Joueurs (2 à 5)</div>
+      <div class="player-list" id="player-list"></div>
+      <button class="btn-add" id="btn-add-player" onclick="addPlayer()" style="display:none">+ Ajouter un joueur</button>
+    </div>
+
+    <div class="setup-section">
+      <div class="setup-label">Connexion joueurs (téléphone)</div>
+      <div style="display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px">
+        <img id="hub-qr" alt="QR de connexion" style="width:112px;height:112px;border-radius:8px;border:1px solid var(--border);background:var(--bg3)" />
+        <div style="min-width:0;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--text2)">Code room</div>
+          <div id="hub-room-code" style="font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:.14em;color:var(--orange)">----</div>
+          <a id="hub-join-link" href="#" target="_blank" rel="noreferrer" style="font-size:12px;color:var(--blue-light);word-break:break-all"></a>
+        </div>
+      </div>
+      <div id="hub-lobby-status" style="margin-top:8px;font-size:12px;color:var(--text2)">Connexion au serveur...</div>
+    </div>
+
+    <div class="setup-section">
+      <div class="setup-label">Objectif de trésorerie</div>
+      <div class="objective-row">
+        <div class="objective-value" style="font-size:36px;text-align:left">1 000 000 €</div>
+      </div>
+    </div>
+
+    <button class="btn-start" onclick="startGame()">🎲 Lancer la partie</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ GAME ══ -->
+<div id="game" class="screen">
+  <div class="game-topbar">
+    <div class="game-logo">AGENCE</div>
+    <div class="players-bar" id="players-bar"></div>
+  </div>
+
+  <div class="game-body">
+    <!-- BOARD -->
+    <div class="board-area">
+      <div class="board" id="board"></div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="side-panel">
+      <div class="side-tabs">
+        <button class="side-tab active" onclick="switchTab('action')">Action</button>
+        <button class="side-tab" onclick="switchTab('cards')">Cartes</button>
+        <button class="side-tab" onclick="switchTab('log')">Journal</button>
+      </div>
+
+      <div class="side-content">
+        <!-- ACTION TAB -->
+        <div id="tab-action" class="tab-content active">
+          <div class="current-player-box" id="current-player-box"></div>
+          <div class="action-area" id="action-area"></div>
+        </div>
+
+        <!-- CARDS TAB -->
+        <div id="tab-cards" class="tab-content">
+          <div id="cards-content"></div>
+        </div>
+
+        <!-- LOG TAB -->
+        <div id="tab-log" class="tab-content">
+          <div id="log-content"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ WIN ══ -->
+<div id="win" class="screen">
+  <div class="win-emoji">🏆</div>
+  <div class="win-title">Victoire !</div>
+  <div class="win-name" id="win-name"></div>
+  <div class="win-amount" id="win-amount"></div>
+  <button class="btn btn-primary" style="max-width:240px;margin:0 auto 12px" onclick="exportLogs()">⬇️ Télécharger les logs JSON</button>
+  <button class="btn btn-secondary" style="max-width:240px;margin:0 auto" onclick="restartGame()">Nouvelle partie</button>
+</div>
+
+<!-- ══════════════════════════════════════════════ MODAL ══ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal">
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-sub" id="modal-sub"></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════ DATA ══
+
+const PLAYER_COLORS = ['#E05252','#3A7BD5','#4CAF7D','#F0C040','#A855F7'];
+const COLOR_CLASSES = ['c0','c1','c2','c3','c4'];
+
+// 28 cases sens horaire, reproduit exactement le plateau original
+const BOARD_CELLS = [
+  // HAUT gauche→droite (0-7)
+  {type:'depart',   label:'Départ',        sub:'Payez 40k€ + salaires', day:'Lundi'},
+  {type:'tva-remb', label:'Remb. TVA',      sub:'Récupérez le pot',      day:'Mardi'},
+  {type:'hasard',   label:'Hasard !',                                    day:'Mercredi'},
+  {type:'cv',       label:'CV',                                          day:'Jeudi'},
+  {type:'brief',    label:'Brief !',                                     day:'Vendredi'},
+  {type:'ao-a',     label:"AO",                                          day:'Samedi', a:true},
+  {type:'repos',    label:'Repos',                                       day:'Dimanche'},
+  {type:'hasard',   label:'Hasard !',                                    day:'Lundi'},
+  // DROITE haut→bas (8-13)
+  {type:'cv',       label:'CV',                                          day:'Mardi'},
+  {type:'ao-a',     label:"AO",                                          day:'Mercredi', a:true},
+  {type:'hasard',   label:'Hasard !',                                    day:'Jeudi'},
+  {type:'ao-a',     label:"AO",                                          day:'Vendredi', a:true},
+  {type:'cv',       label:'CV',                                          day:'Samedi'},
+  {type:'repos',    label:'Repos',                                       day:'Dimanche'},
+  // BAS droite→gauche (14-21)
+  {type:'brief',    label:'Brief !',                                     day:'Lundi'},
+  {type:'hasard',   label:'Hasard !',                                    day:'Mardi'},
+  {type:'cv',       label:'CV',                                          day:'Mercredi'},
+  {type:'tva',      label:'Taxes 30k€',     sub:'Payez 30 000€',         day:'Jeudi'},
+  {type:'ao',       label:"AO",                                          day:'Vendredi'},
+  {type:'hasard',   label:'Hasard !',                                    day:'Samedi'},
+  {type:'repos',    label:'Repos',                                       day:'Dimanche'},
+  {type:'brief',    label:'Brief !',                                     day:'Lundi'},
+  // GAUCHE bas→haut (22-27)
+  {type:'ao',       label:"AO",                                          day:'Mardi'},
+  {type:'hasard',   label:'Hasard !',                                    day:'Mercredi'},
+  {type:'ao',       label:"AO",                                          day:'Jeudi'},
+  {type:'tva',      label:'Taxes 50k€',     sub:'Payez 50 000€',         day:'Vendredi'},
+  {type:'cv',       label:'CV',                                          day:'Samedi'},
+  {type:'repos',    label:'Repos',                                       day:'Dimanche'},
+];
+// 28 cells total
+
+const CV_CARDS = [
+  // CDI Juniors
+  {role:'Directeur Artistique', contract:'CDI', level:'Junior', category:'Graphisme', bonus:1, cost:15000},
+  {role:'Directeur Artistique', contract:'CDI', level:'Junior', category:'Graphisme', bonus:1, cost:15000},
+  {role:'Développeur', contract:'CDI', level:'Junior', category:'Développement', bonus:1, cost:15000},
+  {role:'Concepteur-Rédacteur', contract:'CDI', level:'Junior', category:'Conception', bonus:1, cost:15000},
+  {role:'Concepteur-Rédacteur', contract:'CDI', level:'Junior', category:'Conception', bonus:1, cost:15000},
+  {role:'Consultant Stratégie', contract:'CDI', level:'Junior', category:'Stratégie', bonus:1, cost:15000},
+  {role:'Consultant Stratégie', contract:'CDI', level:'Junior', category:'Stratégie', bonus:1, cost:15000},
+  {role:'Média-Planneur', contract:'CDI', level:'Junior', category:'Média', bonus:1, cost:15000},
+  {role:'Comptable', contract:'CDI', level:'Junior', category:'Stratégie', bonus:1, cost:15000, special:'Retirez 20k€ des charges par tour'},
+  // Alternants
+  {role:'Développeur', contract:'Alternant', level:'Junior', category:'Développement', bonus:1, cost:10000, alternant:true},
+  {role:'Directeur Artistique', contract:'Alternant', level:'Junior', category:'Graphisme', bonus:1, cost:10000, alternant:true},
+  {role:'Concepteur-Rédacteur', contract:'Alternant', level:'Junior', category:'Conception', bonus:1, cost:10000, alternant:true},
+  {role:'Média-Planneur', contract:'Alternant', level:'Junior', category:'Média', bonus:1, cost:10000, alternant:true},
+  {role:'Consultant Stratégie', contract:'Alternant', level:'Junior', category:'Stratégie', bonus:1, cost:10000, alternant:true},
+  // Freelances Juniors
+  {role:'Directeur Artistique', contract:'Freelance', level:'Junior', category:'Graphisme', bonus:1, cost:0, unique:true},
+  {role:'Développeur', contract:'Freelance', level:'Junior', category:'Développement', bonus:1, cost:0, unique:true},
+  {role:'Concepteur-Rédacteur', contract:'Freelance', level:'Junior', category:'Conception', bonus:1, cost:0, unique:true},
+  {role:'Média-Planneur', contract:'Freelance', level:'Junior', category:'Média', bonus:1, cost:0, unique:true},
+  {role:'Consultant Stratégie', contract:'Freelance', level:'Junior', category:'Stratégie', bonus:1, cost:0, unique:true},
+  // Seniors CDI (rares)
+  {role:'Directeur Artistique', contract:'CDI', level:'Senior', category:'Graphisme', bonus:2, cost:25000},
+  {role:'Développeur', contract:'CDI', level:'Senior', category:'Développement', bonus:2, cost:25000},
+  {role:'Consultant Stratégie', contract:'CDI', level:'Senior', category:'Stratégie', bonus:2, cost:25000},
+  {role:'Concepteur-Rédacteur', contract:'CDI', level:'Senior', category:'Conception', bonus:2, cost:25000},
+  // Seniors Freelance
+  {role:'Directeur Artistique', contract:'Freelance', level:'Senior', category:'Graphisme', bonus:2, cost:0, unique:true},
+  {role:'Développeur', contract:'Freelance', level:'Senior', category:'Développement', bonus:2, cost:0, unique:true},
+  {role:'Consultant Stratégie', contract:'Freelance', level:'Senior', category:'Stratégie', bonus:2, cost:0, unique:true},
+];
+
+const AO_CARDS = [
+
+  {client:'Air Solide', mission:"Organiser l'Assemblée Générale", cats:['Stratégie','Graphisme','Conception','Média','Développement'], gain:200000},
+  {client:'Attor Hotels', mission:'Refonte de site web', cats:['Développement','Conception','Graphisme','Média','Stratégie'], gain:100000},
+  {client:'BTP Baripas', mission:'Campagne réseaux sociaux', cats:['Média','Développement','Stratégie','Graphisme','Conception'], gain:220000},
+  {client:'Intersection', mission:'Spot TV', cats:['Conception','Média','Graphisme','Stratégie','Développement'], gain:260000},
+  {client:'Crédit Campagne', mission:'Spot radio', cats:['Conception','Média','Stratégie','Graphisme','Développement'], gain:150000},
+  {client:'Banone', mission:'Brochure éditoriale', cats:['Graphisme','Conception','Stratégie','Média','Développement'], gain:100000},
+  {client:'Rouge Telecom', mission:'Livre blanc', cats:['Graphisme','Stratégie','Conception','Média','Développement'], gain:70000},
+  {client:'Mikelin', mission:'Application interne', cats:['Développement','Graphisme','Stratégie','Média','Conception'], gain:150000},
+  {client:'Losange Automobile', mission:'Application mobile', cats:['Développement','Graphisme','Conception','Média','Stratégie'], gain:130000},
+  {client:'Saint-Godain', mission:'Refonte de site web', cats:['Développement','Stratégie','Graphisme','Média','Conception'], gain:60000},
+  {client:'Société Globale', mission:'Spot radio', cats:['Média','Conception','Stratégie','Graphisme','Développement'], gain:120000},
+  {client:'Cola Corp', mission:"Magazine interne", cats:['Graphisme','Conception','Média','Stratégie','Développement'], gain:90000},
+  {client:'Hariba', mission:'Stratégie produit', cats:['Stratégie','Développement','Graphisme','Média','Conception'], gain:210000},
+  {client:'Big Telecom', mission:'Organisation service digital', cats:['Stratégie','Développement','Conception','Média','Graphisme'], gain:110000},
+  {client:'Pinapple', mission:'Spot TV', cats:['Graphisme','Conception','Média','Stratégie','Développement'], gain:230000},
+  {client:'Harmès', mission:'Affichage métro', cats:['Média','Conception','Graphisme','Stratégie','Développement'], gain:250000},
+  {client:'RADP', mission:'Guérilla marketing', cats:['Conception','Média','Graphisme','Développement','Stratégie'], gain:60000},
+];
+
+const BRIEF_CARDS = [
+  {client:'Nestele', mission:'Brochure éditoriale', base:60000, bonus:20000, malus:20000},
+  {client:'Reineken', mission:'Livre blanc', base:70000, bonus:30000, malus:30000},
+  {client:'Volsgolf', mission:'Application interne', base:60000, bonus:30000, malus:30000},
+  {client:'Dalt Wisney', mission:'Spot TV', base:60000, bonus:30000, malus:30000},
+  {client:'Intersection', mission:'Spot radio', base:90000, bonus:40000, malus:40000},
+  {client:'Christian Pior', mission:'Campagne réseaux sociaux', base:90000, bonus:40000, malus:40000},
+  {client:'Airtrain', mission:"Magazine interne", base:80000, bonus:50000, malus:50000},
+  {client:'La Piste', mission:"AG entreprise", base:70000, bonus:20000, malus:20000},
+  {client:'Lion Automobile', mission:'Service digital', base:40000, bonus:40000, malus:40000},
+  {client:'Leroi Merlin', mission:'Stratégie produit', base:50000, bonus:30000, malus:30000},
+  {client:'Decathlop', mission:'Guérilla marketing', base:70000, bonus:30000, malus:30000},
+  {client:"L'Areol", mission:'Refonte de site web', base:50000, bonus:40000, malus:40000},
+  {client:'TF3', mission:'Campagne réseaux sociaux', base:40000, bonus:40000, malus:40000},
+  {client:'Sumsung', mission:'Application interne', base:70000, bonus:20000, malus:20000},
+  {client:'Crocost', mission:'Refonte de site web', base:80000, bonus:40000, malus:40000},
+  {client:'Fnut', mission:'Brochure éditoriale', base:50000, bonus:20000, malus:20000},
+];
+
+const HASARD_CARDS = [
+  {title:'Panne de la machine à café !', desc:"Votre équipe n'est plus productive…", effect:'skip', amount:0},
+  {title:"Coupure d'internet", desc:'Votre box ne fonctionne plus.', effect:'lose', amount:30000},
+  {title:'Hacker', desc:'Votre développeur a trouvé une faille chez un concurrent.', effect:'steal', amount:0},
+  {title:'Cocaïne', desc:'Vous êtes très en forme et motivé…', effect:'move', amount:0},
+  {title:"C'est ma soirée !", desc:'Vous organisez une soirée mémorable pour vos clients.', effect:'lose', amount:50000},
+  {title:'Merci les comptables', desc:"Votre client s'est trompé et vous paie trop.", effect:'gain', amount:40000},
+  {title:'%!*$€!?!', desc:'Votre chef de projet craque et insulte un client !', effect:'lose', amount:20000},
+  {title:'As de la vente', desc:'Votre commercial a bien travaillé.', effect:'brief', amount:0},
+  {title:'Formation', desc:'Votre salarié décide de se reformer et change de métier !', effect:'lose_cv', amount:0},
+  {title:'Le réseau est tombé', desc:'Vos serveurs tombent en panne.', effect:'lose', amount:60000},
+  {title:'Cannes Lions', desc:'Toutes les agences lancent un dé. Le meilleur score gagne.', effect:'cannes', amount:50000},
+  {title:'CRM maison', desc:'Votre CRM est tellement évolué que vous le revendez.', effect:'gain_from_all', amount:20000},
+  {title:'Burn Out DA', desc:'Votre Directeur Artistique craque et vous quitte…', effect:'burnout', category:'Graphisme'},
+  {title:'Burn Out Dev', desc:'Votre Développeur craque et vous quitte…', effect:'burnout', category:'Développement'},
+  {title:'Burn Out Strat', desc:'Votre Consultant Stratégie craque et vous quitte…', effect:'burnout', category:'Stratégie'},
+  {title:'À l\'écoute du marché', desc:'Votre RH débauche chez un concurrent.', effect:'steal_cv', amount:0},
+];
+
+const SPECIALISATIONS = [
+  {name:'Agence Conception', category:'Conception', bonus:2},
+  {name:'Agence Web', category:'Développement', bonus:2},
+  {name:'Agence Stratégie', category:'Stratégie', bonus:2},
+  {name:'Agence Design', category:'Graphisme', bonus:2},
+  {name:'Agence Média', category:'Média', bonus:2},
+];
+
+const TOP_SECRETS = [
+  {name:'Pot-de-vin', desc:"Vous êtes très proche de votre client…", effect:'win_ao', text:"Gagnez l'appel d'offres de votre choix (à annoncer en début du tour de l'AO)."},
+  {name:'"Best place to work"', desc:'Votre société attire tous les talents…', effect:'steal_all_cv', text:'Volez toutes les cartes CV de toutes les agences.'},
+  {name:'Le meilleur freelance', desc:'Vous avez un véritable couteau-Suisse…', effect:'plus6_ao', text:"Ajoutez +6 dans toutes les catégories à l'AO de votre choix."},
+  {name:'Rumeur', desc:'Vous lâchez un dossier compromettant sur un concurrent…', effect:'rumeur', text:"Choisissez une agence. Elle lance un dé : 1-2 → -100k€, 3-4 → -200k€, 5-6 → -300k€."},
+  {name:'Levée de fonds', desc:'Vous avez réussi votre levée de fonds !', effect:'levee', text:"Lancez un dé : 1-2 → +100k€, 3-4 → +200k€, 5-6 → +300k€."},
+];
+
+// ══════════════════════════════════════════ STATE ══
+
+let G = {};
+
+function initState(playerNames, objective) {
+  const cvDeck = shuffle([...CV_CARDS]);
+  const aoDeck = shuffle([...AO_CARDS]);
+  const briefDeck = shuffle([...BRIEF_CARDS]);
+  const hasardDeck = shuffle([...HASARD_CARDS]);
+  const specs = shuffle([...SPECIALISATIONS]);
+  const secrets = shuffle([...TOP_SECRETS]);
+
+  const players = playerNames.map((name, i) => {
+    const startRoll = rollD6();
+    const capital = startRoll <= 2 ? 150000 : startRoll <= 4 ? 200000 : 250000;
+    const hand = [cvDeck.pop(), cvDeck.pop(), cvDeck.pop()].filter(Boolean);
+    return {
+      id: i,
+      name,
+      color: PLAYER_COLORS[i],
+      capital,
+      position: 0,
+      hand,
+      specialisation: specs[i] || SPECIALISATIONS[i % SPECIALISATIONS.length],
+      topSecret: secrets[i] || TOP_SECRETS[0],
+      topSecretUsed: false,
+      skipsNext: false,
+      startRoll,
+      isFirstLap: true,
+    };
+  });
+
+  G = {
+    players,
+    currentPlayerIdx: 0,
+    objective: objective * 1000000,
+    cvDeck,
+    aoDeck,
+    briefDeck,
+    hasardDeck,
+    tvaPot: 0,
+    log: [],
+    phase: 'roll', // roll | action | ao | brief | cv | hasard | end
+    lastDie: null,
+    currentAO: null,
+    currentBrief: null,
+    currentHasard: null,
+    aoFreelanceOptIn: {},
+    pendingStealCV: false,
+    pendingCocaine: false,
+    aoCategory: 0,
+    currentCV: null,
+    gameOver: false,
+  };
+}
+
+// ══════════════════════════════════════════ UTILS ══
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function rollD6() { return Math.floor(Math.random() * 6) + 1; }
+
+function fmt(n) {
+  if (Math.abs(n) >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M€';
+  if (Math.abs(n) >= 1000) return Math.round(n/1000) + 'k€';
+  return n + '€';
+}
+
+function addLog(html) {
+  G.log.unshift(html);
+  if (G.log.length > 50) G.log.pop();
+}
+
+function currentPlayer() { return G.players[G.currentPlayerIdx]; }
+
+function drawCV() {
+  if (G.cvDeck.length === 0) G.cvDeck = shuffle([...CV_CARDS]);
+  return G.cvDeck.pop();
+}
+
+function drawAO() {
+  if (G.aoDeck.length === 0) G.aoDeck = shuffle([...AO_CARDS]);
+  return G.aoDeck.pop();
+}
+
+function drawBrief() {
+  if (G.briefDeck.length === 0) G.briefDeck = shuffle([...BRIEF_CARDS]);
+  return G.briefDeck.pop();
+}
+
+function drawHasard() {
+  if (G.hasardDeck.length === 0) G.hasardDeck = shuffle([...HASARD_CARDS]);
+  return G.hasardDeck.pop();
+}
+
+function getCharges(player) {
+  // Charges de base : 30k€
+  let total = 30000;
+
+  // Alternants : 5k€ chacun (cheap, c'est normal)
+  const alternants = player.hand.filter(cv => cv.contract === 'Alternant');
+  total += alternants.length * 5000;
+
+  // CDI : exponentiel doux — le Nème CDI coûte base + (N-1)*3k€
+  // Junior : 10k, 13k, 16k, 19k, 22k...
+  // Senior : 18k, 21k, 24k, 27k...
+  const cdis = player.hand.filter(cv => cv.contract === 'CDI');
+  const sorted = [...cdis].sort((a, b) => a.level === 'Senior' ? 1 : -1);
+  sorted.forEach((cv, i) => {
+    const baseCost = cv.level === 'Senior' ? 18000 : 10000;
+    const extraPerSlot = i * 3000;
+    total += baseCost + extraPerSlot;
+  });
+
+  // Comptable : réduit les charges de 15k€
+  const hasComptable = player.hand.some(cv => cv.special && cv.special.includes('Retirez 20k€'));
+  if (hasComptable) total -= 15000;
+
+  return Math.max(total, 10000);
+}
+
+// Affiche le détail des charges pour le joueur courant
+function getChargesDetail(player) {
+  const alternants = player.hand.filter(cv => cv.contract === 'Alternant');
+  const cdis = player.hand.filter(cv => cv.contract === 'CDI');
+  const sorted = [...cdis].sort((a, b) => a.level === 'Senior' ? 1 : -1);
+  const lines = ['Base : 30k€'];
+  alternants.forEach(cv => lines.push(`${cv.role} (Alt) : 5k€`));
+  sorted.forEach((cv, i) => {
+    const base = cv.level === 'Senior' ? 18000 : 10000;
+    const extra = i * 3000;
+    lines.push(`${cv.role} : ${fmt(base + extra)}`);
+  });
+  if (player.hand.some(cv => cv.special && cv.special.includes('Retirez 20k€'))) {
+    lines.push('Comptable : -15k€');
+  }
+  return lines.join(' · ');
+}
+
+function getCVBonus(player, category, isACase) {
+  let bonus = 0;
+  const optIn = G.aoFreelanceOptIn ? (G.aoFreelanceOptIn[player.id] || new Set()) : null;
+  player.hand.forEach((cv, i) => {
+    if (cv.category !== category) return;
+    if (cv.alternant && !isACase) return;
+    if (cv.contract === 'Freelance') {
+      // Only count if player opted in
+      if (!optIn || !optIn.has(i)) return;
+    }
+    bonus += cv.bonus;
+  });
+  if (player.specialisation.category === category) bonus += player.specialisation.bonus;
+  return bonus;
+}
+
+function removeUsedFreelances() {
+  // After AO resolves, remove freelances that were used (opted-in) and put back in deck
+  if (!G.aoFreelanceOptIn) return;
+  G.players.forEach(player => {
+    const used = G.aoFreelanceOptIn[player.id] || new Set();
+    const removed = [];
+    player.hand = player.hand.filter((cv, i) => {
+      if (cv.contract === 'Freelance' && used.has(i)) { removed.push(cv); return false; }
+      return true;
+    });
+    removed.forEach(cv => G.cvDeck.unshift(cv));
+    if (removed.length) addLog(`♻️ ${player.name} remet ${removed.map(c=>c.role).join(', ')} dans le paquet (freelance usage unique)`);
+  });
+  G.aoFreelanceOptIn = {};
+}
+
+function nextPlayer() {
+  G.currentPlayerIdx = (G.currentPlayerIdx + 1) % G.players.length;
+  G.phase = 'roll';
+  G.lastDice = null;
+  const current = G.players[G.currentPlayerIdx];
+  if (current.bankrupt || current.skipsNext) {
+    if (current.skipsNext && !current.bankrupt) {
+      current.skipsNext = false;
+      addLog(`<span class="log-player">${current.name}</span> passe son tour (panne de machine à café…)`);
+    }
+    nextPlayer();
+    return;
+  }
+  render();
+}
+
+const BANKRUPTCY_THRESHOLD = -150000;
+
+function checkWin() {
+  // Vérifier les faillites
+  G.players.forEach(p => {
+    if (!p.bankrupt && p.capital < BANKRUPTCY_THRESHOLD) {
+      p.bankrupt = true;
+      addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> est en <strong>faillite</strong> (trésorerie < -150k€) 💀`);
+    }
+  });
+
+  // Si un seul joueur reste, il gagne
+  const active = G.players.filter(p => !p.bankrupt);
+  if (active.length === 1) {
+    showWin(active[0]);
+    return true;
+  }
+  if (active.length === 0) return false;
+
+  // Victoire par objectif
+  for (const p of active) {
+    if (p.capital >= G.objective) {
+      showWin(p);
+      return true;
+    }
+  }
+  return false;
+}
+
+function showWin(player) {
+  G.gameOver = true;
+  document.getElementById('win-name').textContent = player.name;
+  document.getElementById('win-amount').textContent = fmt(player.capital);
+  showScreen('win');
+}
+
+// ══════════════════════════════════════════ AGENCY NAME GENERATOR ══
+
+const AGENCY_SUFFIXES = [
+  // Pompeux anglais
+  'International', 'Global', 'Worldwide', 'Digital', 'Creative', 'Strategy',
+  // Corp speak
+  '& Associates', '& Co.', 'Group', 'Partners', 'Collective', 'Studios',
+  // Drôles
+  'Corp.', 'Inc.', 'SAS', 'SARL', 'Consulting', 'Solutions',
+  // Agences style
+  'Publicis', 'BBDO', 'DDB', 'FCB', 'Ogilvy',
+  // Vraiment drôles
+  'et ses amis', 'de Paris', 'du futur', 'Premium', 'Luxury', '360°',
+  'sur Seine', 'et Compagnie', 'Prestige', 'Elite', 'Deluxe',
+];
+
+const AGENCY_MIDDLES = [
+  '', '', '', // souvent pas de milieu
+  ' International', ' Global', ' Creative', ' & Digital',
+  ' Communication', ' Advertising', ' Media', ' Design',
+  ' Strategy', ' Brand', ' Content', ' Social',
+];
+
+function generateAgencyName(firstname) {
+  const n = firstname.trim() || 'Agence';
+  const roll = Math.random();
+
+  if (roll < 0.15) {
+    // Acronyme stylé : initiales + mots
+    const words = ['Creative', 'Brand', 'Media', 'Digital', 'Global'];
+    return `${n[0].toUpperCase()}${n[1]?.toUpperCase() || 'B'}${n[2]?.toUpperCase() || 'C'} ${words[Math.floor(Math.random()*words.length)]}`;
+  } else if (roll < 0.3) {
+    // "Prénom & quelque chose"
+    const partners = ['Fils', 'Associés', 'Brothers', 'Sisters', 'Frères', 'Sœurs', 'Cie', 'Friends'];
+    return `${n} & ${partners[Math.floor(Math.random()*partners.length)]}`;
+  } else if (roll < 0.45) {
+    // Format agence classique
+    const classics = ['Agence', 'Studio', 'Cabinet', 'Atelier', 'Bureau'];
+    return `${classics[Math.floor(Math.random()*classics.length)]} ${n}`;
+  } else if (roll < 0.6) {
+    // Fullname pompeux
+    const suffix = AGENCY_SUFFIXES[Math.floor(Math.random()*AGENCY_SUFFIXES.length)];
+    const mid = AGENCY_MIDDLES[Math.floor(Math.random()*AGENCY_MIDDLES.length)];
+    return `${n}${mid} ${suffix}`;
+  } else if (roll < 0.72) {
+    // Le prénom seul mais avec extension absurde
+    const absurd = ['360', 'Pro', 'Plus', 'Max', 'XL', 'Premium', '2.0', 'Next', 'One', 'Lab'];
+    return `${n} ${absurd[Math.floor(Math.random()*absurd.length)]}`;
+  } else if (roll < 0.84) {
+    // Calembour / jeu de mots
+    const puns = [
+      `${n} Communik'`,
+      `${n}ation`,
+      `${n}-fluence`,
+      `${n}vertising`,
+      `${n} & Brand`,
+      `${n} au Carré`,
+    ];
+    return puns[Math.floor(Math.random()*puns.length)];
+  } else {
+    // Format totalement absurde
+    const absurds = [
+      `Les Experts ${n}`,
+      `${n} International Ad Corp.`,
+      `Groupe ${n} Worldwide`,
+      `${n} & Associés Consulting SAS`,
+      `La Maison ${n}`,
+      `${n} — The Agency`,
+      `${n} Unlimited`,
+    ];
+    return absurds[Math.floor(Math.random()*absurds.length)];
+  }
+}
+
+// ══════════════════════════════════════════ SETUP UI ══
+
+let setupPlayers = [
+  {firstname: '', agencyName: ''},
+  {firstname: '', agencyName: ''},
+];
+
+function regenerateAgency(idx) {
+  const p = setupPlayers[idx];
+  if (!p.firstname.trim()) return;
+  p.agencyName = generateAgencyName(p.firstname);
+  renderSetup();
+}
+
+function renderSetup() {
+  const list = document.getElementById('player-list');
+  // Only rebuild if number of players changed (avoid focus loss)
+  const existing = list.querySelectorAll('.player-row');
+  if (existing.length !== setupPlayers.length) {
+    list.innerHTML = setupPlayers.map((p, i) => `
+      <div class="player-row" style="flex-direction:column;gap:8px;align-items:stretch">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="player-color ${COLOR_CLASSES[i]}" style="flex-shrink:0"></div>
+          <input class="player-name-input" data-idx="${i}" value="${p.firstname}"
+            placeholder="Prénom du joueur">
+          ${setupPlayers.length > 2 ? `<button class="btn-remove" onclick="removePlayer(${i})">×</button>` : ''}
+        </div>
+        <div class="agency-name-row" id="agency-row-${i}" style="display:flex;align-items:center;gap:8px;padding-left:26px;min-height:22px">
+          ${p.agencyName ? `<div style="flex:1;font-size:13px;color:var(--orange);font-style:italic">${p.agencyName}</div><button onclick="regenerateAgency(${i})" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text2);padding:2px 4px">🔄</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+    // Attach listeners once
+    list.querySelectorAll('.player-name-input').forEach(input => {
+      input.addEventListener('input', function() {
+        const idx = parseInt(this.dataset.idx);
+        setupPlayers[idx].firstname = this.value;
+        setupPlayers[idx].agencyName = this.value.trim() ? generateAgencyName(this.value) : '';
+        // Only update the agency name div, not the whole list
+        const row = document.getElementById(`agency-row-${idx}`);
+        if (row) {
+          const name = setupPlayers[idx].agencyName;
+          row.innerHTML = name
+            ? `<div style="flex:1;font-size:13px;color:var(--orange);font-style:italic">${name}</div><button onclick="regenerateAgency(${idx})" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text2);padding:2px 4px">🔄</button>`
+            : '';
+        }
       });
+    });
+  } else {
+    // Just update agency name rows
+    setupPlayers.forEach((p, i) => {
+      const row = document.getElementById(`agency-row-${i}`);
+      if (row) {
+        row.innerHTML = p.agencyName
+          ? `<div style="flex:1;font-size:13px;color:var(--orange);font-style:italic">${p.agencyName}</div><button onclick="regenerateAgency(${i})" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text2);padding:2px 4px">🔄</button>`
+          : '';
+      }
+    });
+  }
+  document.getElementById('btn-add-player').style.display = setupPlayers.length >= 5 ? 'none' : 'block';
+}
 
-      ws.addEventListener("message", (event) => {
-        const data = JSON.parse(event.data);
+function addPlayer() {
+  if (setupPlayers.length >= 5) return;
+  setupPlayers.push({firstname: '', agencyName: ''});
+  renderSetup();
+}
 
-        if (data.type === "room_created") {
-          roomCodeEl.textContent = data.roomCode;
-          qrEl.src = data.qrDataUrl;
-          joinLinkEl.href = data.joinUrl;
-          joinLinkEl.textContent = data.joinUrl;
-          log(`Room ${data.roomCode} creee.`);
-          return;
+function removePlayer(i) {
+  setupPlayers.splice(i, 1);
+  renderSetup();
+}
+
+function updateObjective() {}
+
+function startGame() {
+  // Utilise agencyName si dispo, sinon firstname, sinon "Agence N"
+  const names = setupPlayers.map((p, i) =>
+    p.agencyName || p.firstname.trim() || `Agence ${i+1}`
+  );
+  const obj = 1;
+
+  // Init without capital (will be set during roll sequence)
+  const cvDeck = shuffle([...CV_CARDS]);
+  const aoDeck = shuffle([...AO_CARDS]);
+  const briefDeck = shuffle([...BRIEF_CARDS]);
+  const hasardDeck = shuffle([...HASARD_CARDS]);
+  const specs = shuffle([...SPECIALISATIONS]);
+  const secrets = shuffle([...TOP_SECRETS]);
+
+  G = {
+    players: names.map((name, i) => ({
+      id: i, name, color: PLAYER_COLORS[i], capital: 0, position: 0,
+      hand: [cvDeck.pop(), cvDeck.pop(), cvDeck.pop()].filter(Boolean),
+      specialisation: specs[i] || SPECIALISATIONS[i % SPECIALISATIONS.length],
+      topSecret: secrets[i] || TOP_SECRETS[0],
+      topSecretUsed: false, skipsNext: false, isFirstLap: true, bankrupt: false,
+      startRoll: null,
+    })),
+    currentPlayerIdx: 0,
+    objective: obj * 1000000,
+    cvDeck, aoDeck, briefDeck, hasardDeck,
+    tvaPot: 0, log: [], phase: 'roll',
+    lastDice: null, currentAO: null, currentBrief: null, currentHasard: null,
+    aoFreelanceOptIn: {}, pendingStealCV: false, pendingCocaine: false,
+    aoCategory: 0, currentCV: null, gameOver: false, aoTiedPlayerIds: null,
+    specCardFlipped: {},
+  };
+
+  buildBoard();
+  showScreen('game');
+  addLog(`🎮 Partie lancée ! Objectif : <strong>${fmt(G.objective)}</strong>`);
+
+  // Start capital roll sequence
+  rollCapitalForPlayer(0);
+}
+
+function rollCapitalForPlayer(idx) {
+  if (idx >= G.players.length) {
+    G.players.forEach(p => {
+      addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> démarre avec <span class="log-amount gain">${fmt(p.capital)}</span> (dé : ${p.startRoll})`);
+    });
+    render();
+    return;
+  }
+
+  const player = G.players[idx];
+  G._capitalRolled = G._capitalRolled || {};
+  G._capitalRolled[idx] = false;
+  G._specRevealed = G._specRevealed || {};
+  G._specRevealed[idx] = false;
+  G._tsRevealed = G._tsRevealed || {};
+  G._tsRevealed[idx] = false;
+  G._cvRevealed = G._cvRevealed || {};
+  G._cvRevealed[idx] = false;
+
+  const nextLabel = idx < G.players.length - 1 ? 'Joueur suivant →' : "C'est parti ! 🚀";
+
+  showModal(
+    `🎲 Démarrage — ${player.name}`,
+    `<span style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:50%;background:${player.color};display:inline-block"></span><strong>${player.name}</strong></span>`,
+    `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0">
+
+      <!-- Capital die -->
+      <div style="flex:1;text-align:center">
+        <div style="font-size:9px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.1em">Capital</div>
+        <div id="capital-die-${idx}" style="display:flex;justify-content:center;margin-bottom:6px">${dieSVG(null, 48)}</div>
+        <div id="capital-result-${idx}" style="font-size:9px;color:var(--text2);line-height:1.6">1-2 → 150k€<br>3-4 → 200k€<br>5-6 → 250k€</div>
+        <button class="btn btn-primary" id="btn-die-${idx}" onclick="rollCapitalDie(${idx})" style="margin-top:8px;padding:5px 10px;font-size:11px">🎲 Lancer</button>
+      </div>
+
+      <div style="width:1px;background:var(--border);align-self:stretch"></div>
+
+      <!-- Spec card -->
+      <div style="flex:1;text-align:center">
+        <div style="font-size:9px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.1em">Spécialisation</div>
+        <div id="spec-reveal-${idx}" onclick="revealSpecCard(${idx})" style="
+          width:100%;min-height:72px;border-radius:8px;cursor:pointer;
+          background:repeating-linear-gradient(45deg,var(--card2),var(--card2) 4px,var(--card) 4px,var(--card) 8px);
+          border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+          flex-direction:column;gap:3px;padding:8px;
+          transition:transform 0.6s ease, background 0.3s, border-color 0.3s, box-shadow 0.3s;">
+          <div style="font-size:16px">🃏</div>
+          <div style="font-size:9px;color:var(--text2)">Cliquer</div>
+        </div>
+      </div>
+
+      <div style="width:1px;background:var(--border);align-self:stretch"></div>
+
+      <!-- Top Secret -->
+      <div style="flex:1;text-align:center">
+        <div style="font-size:9px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.1em">Top Secret</div>
+        <div id="ts-reveal-${idx}" onclick="revealTsCard(${idx})" style="
+          width:100%;min-height:72px;border-radius:8px;cursor:pointer;
+          background:repeating-linear-gradient(45deg,var(--card2),var(--card2) 4px,var(--card) 4px,var(--card) 8px);
+          border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+          flex-direction:column;gap:3px;padding:8px;
+          transition:transform 0.6s ease, background 0.3s, border-color 0.3s, box-shadow 0.3s;">
+          <div style="font-size:16px">🔒</div>
+          <div style="font-size:9px;color:var(--text2)">Cliquer</div>
+        </div>
+      </div>
+
+      <div style="width:1px;background:var(--border);align-self:stretch"></div>
+
+      <!-- CVs de départ -->
+      <div style="flex:1;text-align:center">
+        <div style="font-size:9px;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.1em">CVs de départ</div>
+        <div id="cv-reveal-${idx}" onclick="revealCVs(${idx})" style="
+          width:100%;min-height:72px;border-radius:8px;cursor:pointer;
+          background:repeating-linear-gradient(45deg,var(--card2),var(--card2) 4px,var(--card) 4px,var(--card) 8px);
+          border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+          flex-direction:column;gap:3px;padding:8px;
+          transition:all 0.3s;">
+          <div style="font-size:16px">👤</div>
+          <div style="font-size:9px;color:var(--text2)">Cliquer</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Continue button in body so we can control it -->
+    <button id="btn-next-${idx}" class="btn btn-secondary" disabled
+      onclick="nextCapitalRoll(${idx})"
+      style="width:100%;margin-top:12px;opacity:0.4">
+      Lancez le dé + révélez les 3 cartes
+    </button>`,
+    [] // no modal-actions buttons
+  );
+}
+
+function updateCapitalNextBtn(idx) {
+  const btn = document.getElementById(`btn-next-${idx}`);
+  if (!btn) return;
+  const rolled = G._capitalRolled && G._capitalRolled[idx];
+  const revealed = G._specRevealed && G._specRevealed[idx];
+  const tsRevealed = G._tsRevealed && G._tsRevealed[idx];
+  const cvRevealed = G._cvRevealed && G._cvRevealed[idx];
+  const ready = rolled && revealed && tsRevealed && cvRevealed;
+  btn.disabled = !ready;
+  btn.style.opacity = ready ? '1' : '0.4';
+  btn.className = `btn ${ready ? 'btn-primary' : 'btn-secondary'}`;
+  const next = idx < G.players.length - 1;
+  btn.textContent = ready
+    ? (next ? 'Joueur suivant →' : "C'est parti ! 🚀")
+    : 'Lancez le dé + révélez les 3 cartes';
+}
+
+function revealCVs(idx) {
+  if (G._cvRevealed && G._cvRevealed[idx]) return;
+  G._cvRevealed = G._cvRevealed || {};
+  G._cvRevealed[idx] = true;
+
+  const player = G.players[idx];
+  const el = document.getElementById(`cv-reveal-${idx}`);
+  if (!el) return;
+
+  el.style.cursor = 'default';
+  el.style.background = 'var(--card2)';
+  el.style.borderColor = 'var(--border)';
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:4px;width:100%">
+      ${player.hand.map(cv => `
+        <div style="background:var(--bg3);border-radius:5px;padding:4px 6px;text-align:left">
+          <div style="font-size:10px;font-weight:600;color:var(--text)">${cv.role}</div>
+          <div style="font-size:9px;color:var(--green)">+${cv.bonus} ${cv.category}</div>
+          <div style="font-size:9px;color:var(--text2)">${cv.level} ${cv.contract}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  updateCapitalNextBtn(idx);
+}
+
+function revealTsCard(idx) {
+  if (G._tsRevealed && G._tsRevealed[idx]) return;
+  G._tsRevealed = G._tsRevealed || {};
+  G._tsRevealed[idx] = true;
+
+  const player = G.players[idx];
+  const ts = player.topSecret;
+  const el = document.getElementById(`ts-reveal-${idx}`);
+  if (!el) return;
+
+  el.style.transform = 'rotateY(90deg)';
+  setTimeout(() => {
+    el.style.transform = 'rotateY(0deg)';
+    el.style.background = 'linear-gradient(135deg,rgba(240,192,64,0.12),var(--card))';
+    el.style.borderColor = 'var(--yellow)';
+    el.style.boxShadow = '0 0 10px rgba(240,192,64,0.2)';
+    el.style.cursor = 'default';
+    el.innerHTML = `
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--yellow);letter-spacing:0.05em">${ts.name}</div>
+      <div style="font-size:10px;color:var(--text2);margin-top:3px;line-height:1.3">${ts.text}</div>
+    `;
+    updateCapitalNextBtn(idx);
+  }, 300);
+}
+
+function revealSpecCard(idx) {
+  if (G._specRevealed && G._specRevealed[idx]) return;
+  G._specRevealed = G._specRevealed || {};
+  G._specRevealed[idx] = true;
+
+  const player = G.players[idx];
+  const spec = player.specialisation;
+  const el = document.getElementById(`spec-reveal-${idx}`);
+  if (!el) return;
+
+  el.style.transform = 'rotateY(90deg)';
+  setTimeout(() => {
+    el.style.transform = 'rotateY(0deg)';
+    el.style.background = 'linear-gradient(135deg,var(--card2),var(--card))';
+    el.style.borderColor = 'var(--orange)';
+    el.style.boxShadow = '0 0 12px rgba(232,131,74,0.3)';
+    el.style.cursor = 'default';
+    el.innerHTML = `
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:var(--orange);letter-spacing:0.05em">${spec.name}</div>
+      <div style="font-size:22px;font-family:'Bebas Neue',sans-serif;color:var(--green)">+${spec.bonus}</div>
+      <div style="font-size:11px;color:var(--text2)">${spec.category}</div>
+    `;
+    updateCapitalNextBtn(idx);
+  }, 300);
+}
+
+function rollCapitalDie(idx) {
+  const player = G.players[idx];
+  const dieEl = document.getElementById(`capital-die-${idx}`);
+  const btn = document.getElementById(`btn-die-${idx}`);
+  if (btn) btn.disabled = true;
+
+  let ticks = 0;
+  const flicker = setInterval(() => {
+    ticks++;
+    if (dieEl) dieEl.innerHTML = dieSVG(Math.ceil(Math.random()*6), 64);
+    if (ticks > 8) clearInterval(flicker);
+  }, 60);
+
+  setTimeout(() => {
+    clearInterval(flicker);
+    const roll = rollD6();
+    const capital = roll <= 2 ? 150000 : roll <= 4 ? 200000 : 250000;
+    player.startRoll = roll;
+    player.capital = capital;
+    if (dieEl) dieEl.innerHTML = dieSVG(roll, 64);
+
+    const resultEl = document.getElementById(`capital-result-${idx}`);
+    if (resultEl) resultEl.innerHTML = `<span style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--green)">+${fmt(capital)}</span><br><span style="font-size:11px;color:var(--text2)">Dé : ${roll}</span>`;
+
+    G._capitalRolled = G._capitalRolled || {};
+    G._capitalRolled[idx] = true;
+    updateCapitalNextBtn(idx);
+  }, 650);
+}
+
+function nextCapitalRoll(idx) {
+  closeModal();
+  rollCapitalForPlayer(idx + 1);
+}
+
+// ══════════════════════════════════════════ BOARD ══
+
+function buildBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+
+  // 28 cells around 8x8 grid
+  // Positions in grid (row, col) 1-indexed
+  const positions = [
+    // Top row: row1, col1-8
+    [1,1],[1,2],[1,3],[1,4],[1,5],[1,6],[1,7],[1,8],
+    // Right col: row2-7, col8
+    [2,8],[3,8],[4,8],[5,8],[6,8],[7,8],
+    // Bottom row: row8, col8-1
+    [8,8],[8,7],[8,6],[8,5],[8,4],[8,3],[8,2],[8,1],
+    // Left col: row7-2, col1
+    [7,1],[6,1],[5,1],[4,1],[3,1],[2,1],
+  ];
+
+  // Create all 64 cells
+  const grid = {};
+  for (let r = 1; r <= 8; r++) {
+    for (let c = 1; c <= 8; c++) {
+      const div = document.createElement('div');
+      div.style.gridRow = r;
+      div.style.gridColumn = c;
+      if (r >= 2 && r <= 7 && c >= 2 && c <= 7) {
+        // center
+        if (r === 2 && c === 2) {
+          div.className = 'cell cell-center';
+          div.style.gridRow = '2 / 8';
+          div.style.gridColumn = '2 / 8';
+          div.style.position = 'relative';
+          div.innerHTML = `
+            <div class="center-label">ADMINISTRATION<br>PUBLIQUE</div>
+            <div class="center-pot" id="tva-pot-display">0€</div>
+            <div class="center-pot-label">Pot TVA</div>
+            <div class="center-dice-overlay" id="center-dice-overlay" style="opacity:0"></div>
+          `;
+          board.appendChild(div);
         }
+        continue;
+      }
+      grid[`${r},${c}`] = div;
+      board.appendChild(div);
+    }
+  }
 
-        if (data.type === "participant_joined") {
-          log("Un joueur a rejoint.");
-          return;
+  // Fill board cells
+  BOARD_CELLS.forEach((cell, idx) => {
+    const [r, c] = positions[idx];
+    const div = grid[`${r},${c}`];
+    if (!div) return;
+    div.id = `cell-${idx}`;
+    div.className = `cell ${cell.type}`;
+    div.innerHTML = `
+      <div>
+        <div class="cell-type">${cell.label}</div>
+        ${cell.sub ? `<div style="font-size:8px;opacity:0.6;margin-top:2px">${cell.sub}</div>` : ''}
+        ${cell.a ? '<div class="a-badge">A</div>' : ''}
+      </div>
+      <div>
+        <div class="cell-day">${cell.day}</div>
+        <div class="cell-pions" id="pions-${idx}"></div>
+      </div>
+    `;
+  });
+}
+
+function renderPions() {
+  for (let i = 0; i < BOARD_CELLS.length; i++) {
+    const el = document.getElementById(`pions-${i}`);
+    if (el) el.innerHTML = '';
+  }
+  G.players.forEach(p => {
+    const el = document.getElementById(`pions-${p.position}`);
+    if (el) {
+      const initials = p.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const isActive = p.id === G.currentPlayerIdx;
+      el.innerHTML += `<div class="pion ${isActive ? 'landing' : ''}" 
+        style="background:${p.color};border-color:${isActive ? 'white' : 'rgba(255,255,255,0.5)'};
+               box-shadow:${isActive ? `0 0 8px ${p.color}` : '0 2px 6px rgba(0,0,0,0.5)'};"
+        title="${p.name}">${initials}</div>`;
+    }
+  });
+  const pot = document.getElementById('tva-pot-display');
+  if (pot) pot.textContent = fmt(G.tvaPot);
+}
+
+// ══════════════════════════════════════════ RENDER ══
+
+function render() {
+  if (G.gameOver) return;
+  renderPions();
+  renderTopBar();
+  renderActionTab();
+  renderCardsTab();
+  renderLogTab();
+}
+
+function renderTopBar() {
+  const bar = document.getElementById('players-bar');
+  bar.innerHTML = G.players.map((p, i) => `
+    <div class="player-chip ${i === G.currentPlayerIdx ? 'active' : ''}">
+      <div class="player-chip-dot" style="background:${p.color}"></div>
+      <span class="player-chip-name">${p.name}</span>
+      <span class="player-chip-money ${p.capital < 0 ? 'negative' : ''}">${fmt(p.capital)}</span>
+    </div>
+  `).join('');
+}
+
+function renderActionTab() {
+  const p = currentPlayer();
+  const box = document.getElementById('current-player-box');
+  const charges = getCharges(p);
+
+  const CATS = ['Stratégie','Graphisme','Conception','Média','Développement'];
+
+  // Compute force per category
+  const forces = {};
+  CATS.forEach(cat => {
+    let total = 0;
+    p.hand.forEach(cv => {
+      if (cv.category === cat && cv.contract !== 'Freelance') total += cv.bonus;
+    });
+    if (p.specialisation.category === cat) total += p.specialisation.bonus;
+    forces[cat] = total;
+  });
+  const maxForce = Math.max(...Object.values(forces), 1);
+
+  box.innerHTML = `
+    <div class="current-label">Tour en cours</div>
+    <div class="current-name">
+      <div class="player-chip-dot" style="background:${p.color};width:14px;height:14px"></div>
+      ${p.name}
+    </div>
+    <div class="current-money ${p.capital < 0 ? 'negative' : 'positive'}">${fmt(p.capital)}</div>
+    <div style="font-size:11px;color:var(--text2);margin-top:4px">Charges/tour : <strong style="color:var(--orange)">${fmt(charges)}</strong></div>
+
+    <!-- Force bars -->
+    <div class="force-grid">
+      ${CATS.map(cat => {
+        const val = forces[cat];
+        const isSpec = p.specialisation.category === cat;
+        const pct = Math.min(val / (maxForce + 2) * 100, 100);
+        return `<div class="force-bar ${isSpec ? 'is-spec' : ''}">
+          <div class="force-bar-fill" style="transform:scaleX(${pct/100})"></div>
+          ${isSpec ? '<div class="force-spec-badge">★ SPÉC</div>' : ''}
+          <div class="force-bar-label">${cat}</div>
+          <div class="force-bar-value">+${val}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+
+  const area = document.getElementById('action-area');
+  if (G.phase === 'roll') {
+    area.innerHTML = `
+      <div class="action-title">🎲 À vous de jouer</div>
+      <div class="action-desc">Lancez le dé — le résultat s'affiche au centre du plateau.</div>
+      <button class="btn btn-primary" onclick="doRoll()" id="btn-roll">🎲 Lancer le dé</button>
+      ${!p.topSecretUsed ? `<button class="btn btn-secondary" onclick="useTopSecret()" style="background:rgba(240,192,64,0.1);border-color:var(--yellow);color:var(--yellow)">🔒 Utiliser ma carte Top Secret</button>` : ''}
+    `;
+  } else if (G.phase === 'action') {
+    renderCaseAction(area);
+  }
+}
+
+function renderCaseAction(area) {
+  const p = currentPlayer();
+  const cell = BOARD_CELLS[p.position];
+
+  if (cell.type === 'depart') {
+    const charges = getCharges(p);
+    area.innerHTML = `
+      <div class="action-title">🏁 Case Départ</div>
+      <div class="action-desc">Nouveau mois ! Payez vos charges : <strong>${fmt(charges)}</strong></div>
+      <button class="btn btn-primary" onclick="payCharges()">Payer les charges</button>
+    `;
+  } else if (cell.type === 'ao' || cell.type === 'ao-a') {
+    area.innerHTML = `
+      <div class="action-title">📋 Appel d'offres</div>
+      <div class="action-desc">Un AO arrive ! Tout le monde participe.</div>
+      <button class="btn btn-primary" onclick="startAO()">Tirer la carte AO</button>
+    `;
+  } else if (cell.type === 'brief') {
+    area.innerHTML = `
+      <div class="action-title">📩 Brief !</div>
+      <div class="action-desc">Vous avez reçu un brief. Vous êtes le seul à jouer.</div>
+      <button class="btn btn-primary" onclick="startBrief()">Tirer la carte Brief</button>
+    `;
+  } else if (cell.type === 'cv') {
+    area.innerHTML = `
+      <div class="action-title">👤 CV</div>
+      <div class="action-desc">Un candidat se présente. Voulez-vous le recruter ?</div>
+      <button class="btn btn-primary" onclick="startCV()">Voir le CV</button>
+      <button class="btn btn-secondary" onclick="passCV()">Refuser</button>
+    `;
+  } else if (cell.type === 'hasard') {
+    area.innerHTML = `
+      <div class="action-title">🎴 Hasard !</div>
+      <div class="action-desc">Piochez une carte Hasard.</div>
+      <button class="btn btn-primary" onclick="startHasard()">Piocher</button>
+    `;
+  } else if (cell.type === 'tva') {
+    const amount = cell.sub.includes('30') ? 30000 : 50000;
+    area.innerHTML = `
+      <div class="action-title">🏛️ Taxes !</div>
+      <div class="action-desc">L'État vous réclame <strong>${fmt(amount)}</strong>. Versez au pot central.</div>
+      <button class="btn btn-primary" onclick="payTVA(${amount})">Payer ${fmt(amount)}</button>
+    `;
+  } else if (cell.type === 'tva-remb') {
+    area.innerHTML = `
+      <div class="action-title">💰 Remboursement TVA</div>
+      <div class="action-desc">Vous récupérez le pot central : <strong>${fmt(G.tvaPot)}</strong> !</div>
+      <button class="btn btn-green" onclick="getRefund()">Encaisser ${fmt(G.tvaPot)}</button>
+    `;
+  } else if (cell.type === 'repos') {
+    area.innerHTML = `
+      <div class="action-title">😴 Repos</div>
+      <div class="action-desc">Rien à faire cette case. Profitez-en.</div>
+      <button class="btn btn-secondary" onclick="endTurn()">Fin du tour</button>
+    `;
+  }
+}
+
+function renderCardsTab() {
+  const p = currentPlayer();
+  document.getElementById('cards-content').innerHTML = `
+    <div class="spec-card">
+      <div class="spec-title">⭐ ${p.specialisation.name}</div>
+      <div class="spec-desc">+${p.specialisation.bonus} permanent en ${p.specialisation.category} sur tous les AO</div>
+    </div>
+    <div class="secret-card ${p.topSecretUsed ? 'secret-used' : ''}">
+      <div class="secret-title">🔒 ${p.topSecret.name}</div>
+      <div class="secret-desc">${p.topSecret.text}</div>
+      ${p.topSecretUsed ? '<div style="font-size:11px;color:var(--red);margin-top:4px">Déjà utilisée</div>' : ''}
+    </div>
+    <div style="margin-top:14px;font-size:11px;text-transform:uppercase;letter-spacing:0.15em;color:var(--text2);margin-bottom:8px">
+      Tous les joueurs
+    </div>
+    ${G.players.map(pl => `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${pl.color}"></div>
+          <strong style="font-size:13px">${pl.name}</strong>
+          <span style="font-size:12px;color:var(--text2);margin-left:auto">${fmt(pl.capital)}</span>
+        </div>
+        <div class="cv-list">${pl.hand.map(cv => `
+          <div class="cv-chip">
+            <span class="cv-chip-type">${cv.level[0]}</span>
+            <span>${cv.category}</span>
+            <span class="cv-chip-bonus">+${cv.bonus}</span>
+          </div>
+        `).join('') || '<span style="font-size:11px;color:var(--text2)">Aucun CV</span>'}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function renderLogTab() {
+  const exportBtn = `<button class="btn btn-secondary" onclick="exportLogs()" style="margin-bottom:12px;font-size:12px">⬇️ Télécharger les logs (JSON)</button>`;
+  document.getElementById('log-content').innerHTML = exportBtn + (G.log.map(l =>
+    `<div class="log-entry">${l}</div>`
+  ).join('') || '<div style="color:var(--text2);font-size:12px">Le journal est vide.</div>');
+}
+
+function exportLogs() {
+  const snapshot = {
+    exportedAt: new Date().toISOString(),
+    objective: G.objective,
+    players: G.players.map(p => ({
+      name: p.name,
+      capital: p.capital,
+      position: p.position,
+      specialisation: p.specialisation.name,
+      topSecretUsed: p.topSecretUsed,
+      cvCount: p.hand.length,
+      hand: p.hand.map(cv => `${cv.level} ${cv.contract} ${cv.role} (+${cv.bonus} ${cv.category})`),
+    })),
+    tvaPot: G.tvaPot,
+    currentPlayerIdx: G.currentPlayerIdx,
+    log: G.log.map(l => l.replace(/<[^>]+>/g, '')),
+  };
+  const json = JSON.stringify(snapshot, null, 2);
+  showModal(
+    '📋 Logs de partie',
+    'Sélectionnez tout et copiez (Ctrl+A puis Ctrl+C)',
+    `<textarea id="log-json-area" readonly
+      style="width:100%;height:260px;background:var(--bg);border:1px solid var(--border);
+             border-radius:8px;padding:10px;font-family:monospace;font-size:11px;
+             color:var(--text);resize:none;outline:none;"
+    >${json}</textarea>`,
+    [{label:'Tout sélectionner', cls:'btn-primary', fn:'selectLogJson()'}, {label:'Fermer', cls:'btn-secondary', fn:'closeModal()'}]
+  );
+}
+
+function selectLogJson() {
+  const ta = document.getElementById('log-json-area');
+  if (ta) { ta.focus(); ta.select(); }
+}
+
+// ── CENTER DICE DISPLAY ──
+let centerDiceTimer = null;
+
+function showCenterDice(d1, d2, label, playerName, playerColor) {
+  const overlay = document.getElementById('center-dice-overlay');
+  if (!overlay) return;
+  if (centerDiceTimer) { clearTimeout(centerDiceTimer); centerDiceTimer = null; }
+  const total = d1 + d2;
+  overlay.style.opacity = '1';
+  overlay.classList.remove('fade-out');
+  overlay.innerHTML = `
+    <div class="center-dice-player" style="color:${playerColor}">${playerName}</div>
+    <div class="center-dice-row">
+      <div class="center-die">${dieSVG(d1, 64)}</div>
+      <div style="font-size:22px;color:var(--text2)">+</div>
+      <div class="center-die">${dieSVG(d2, 64)}</div>
+    </div>
+    <div class="center-dice-total">${total}</div>
+    <div class="center-dice-label">${label}</div>
+  `;
+  centerDiceTimer = setTimeout(() => {
+    overlay.classList.add('fade-out');
+    setTimeout(() => { overlay.style.opacity = '0'; overlay.innerHTML = ''; }, 800);
+  }, 3000);
+}
+
+// Roll 1 or 2 dice on center, animate, then call cb(results)
+// rolls = number of dice (1 or 2), label/playerName/playerColor for display
+function rollOnCenter(rolls, label, playerName, playerColor, cb) {
+  const overlay = document.getElementById('center-dice-overlay');
+  if (!overlay) { cb(rolls === 1 ? [rollD6()] : [rollD6(), rollD6()]); return; }
+  if (centerDiceTimer) { clearTimeout(centerDiceTimer); centerDiceTimer = null; }
+
+  overlay.style.opacity = '1';
+  overlay.classList.remove('fade-out');
+
+  const showFlicker = () => {
+    const d = Array.from({length: rolls}, () => Math.ceil(Math.random()*6));
+    overlay.innerHTML = `
+      <div class="center-dice-player" style="color:${playerColor}">${playerName}</div>
+      <div class="center-dice-row">
+        ${d.map(v => `<div class="center-die rolling">${dieSVG(v, 64)}</div>`).join('<div style="font-size:22px;color:var(--text2)">+</div>')}
+      </div>
+      <div class="center-dice-total" style="color:var(--text2)">?</div>
+      <div class="center-dice-label">${label}</div>
+    `;
+  };
+
+  showFlicker();
+  let ticks = 0;
+  const flicker = setInterval(() => { ticks++; showFlicker(); if (ticks > 8) clearInterval(flicker); }, 60);
+
+  setTimeout(() => {
+    clearInterval(flicker);
+    const results = Array.from({length: rolls}, () => rollD6());
+    const total = results.reduce((a,b) => a+b, 0);
+    overlay.innerHTML = `
+      <div class="center-dice-player" style="color:${playerColor}">${playerName}</div>
+      <div class="center-dice-row">
+        ${results.map(v => `<div class="center-die">${dieSVG(v, 64)}</div>`).join('<div style="font-size:22px;color:var(--text2)">+</div>')}
+      </div>
+      <div class="center-dice-total">${total}</div>
+      <div class="center-dice-label">${label}</div>
+    `;
+    centerDiceTimer = setTimeout(() => {
+      overlay.classList.add('fade-out');
+      setTimeout(() => { overlay.style.opacity = '0'; overlay.innerHTML = ''; }, 800);
+    }, 3000);
+    cb(results);
+  }, 650);
+}
+
+function showCenterDiceAnimated(d1final, d2final, label, playerName, playerColor) {
+  showCenterDice(d1final, d2final, label, playerName, playerColor);
+}
+function dieSVG(value, size = 56) {
+  const DOT_POSITIONS = {
+    1: [[28,28]],
+    2: [[14,14],[42,42]],
+    3: [[14,14],[28,28],[42,42]],
+    4: [[14,14],[42,14],[14,42],[42,42]],
+    5: [[14,14],[42,14],[28,28],[14,42],[42,42]],
+    6: [[14,14],[42,14],[14,28],[42,28],[14,42],[42,42]],
+  };
+  const bg = value ? '#2C2C48' : '#1E1E32';
+  const bc = value ? '#E8834A' : '#32324A';
+  const dotColor = value ? '#E8834A' : '#32324A';
+  const dots = value ? DOT_POSITIONS[value].map(([cx,cy]) =>
+    `<circle cx="${cx}" cy="${cy}" r="4.5" fill="${dotColor}"/>`
+  ).join('') : '';
+  return `<svg viewBox="0 0 56 56" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="52" height="52" rx="10" fill="${bg}" stroke="${bc}" stroke-width="2"/>
+    <rect x="4" y="4" width="48" height="18" rx="6" fill="rgba(255,255,255,0.04)"/>
+    ${dots}
+  </svg>`;
+}
+
+// ══════════════════════════════════════════ ACTIONS ══
+
+function doRoll() {
+  const btn = document.getElementById('btn-roll');
+  if (btn) btn.disabled = true;
+  const p = currentPlayer();
+  rollOnCenter(1, 'Déplacement', p.name, p.color, ([d1]) => {
+    const total = d1;
+    G.lastDice = [d1];
+    const destPos = (p.position + total) % BOARD_CELLS.length;
+    const cellDest = BOARD_CELLS[destPos];
+
+    const overlay = document.getElementById('center-dice-overlay');
+    if (overlay) {
+      const lbl = overlay.querySelector('.center-dice-label');
+      if (lbl) lbl.textContent = `→ ${cellDest.label} (${cellDest.day})`;
+    }
+
+    const oldPos = p.position;
+    animatePionSteps(p, oldPos, total, () => {
+      const passedStart = destPos < oldPos || (oldPos + total >= BOARD_CELLS.length);
+      if (passedStart && !p.isFirstLap) {
+        const cell = BOARD_CELLS[destPos];
+        if (cell.type !== 'depart') {
+          addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> passe par la case Départ → charges à payer`);
+          const charges = getCharges(p);
+          p.capital -= charges;
+          addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> paie <span class="log-amount loss">${fmt(charges)}</span> de charges`);
+          if (checkWin()) return;
         }
+      }
+      p.isFirstLap = false;
+      addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> lance <strong>${d1}</strong> → <strong>${cellDest.label}</strong> (${cellDest.day})`);
+      G.phase = 'action';
+      setTimeout(() => render(), 200);
+    });
+  });
+}
 
-        if (data.type === "participant_left") {
-          log("Un participant a quitte.");
-          return;
-        }
+function animatePionSteps(player, startPos, steps, onDone) {
+  let currentStep = 0;
+  const totalSteps = steps;
 
-        if (data.type === "relay") {
-          log(`Message recu: ${JSON.stringify(data.payload)}`);
-          return;
-        }
+  function step() {
+    currentStep++;
+    player.position = (startPos + currentStep) % BOARD_CELLS.length;
+    renderPions();
 
-        if (data.type === "error") {
-          log(`Erreur: ${data.message}`);
+    // Flash the current cell
+    const cellEl = document.getElementById(`cell-${player.position}`);
+    if (cellEl) {
+      cellEl.style.filter = 'brightness(1.5)';
+      setTimeout(() => { cellEl.style.filter = ''; }, 150);
+    }
+
+    if (currentStep < totalSteps) {
+      setTimeout(step, 180);
+    } else {
+      setTimeout(onDone, 200);
+    }
+  }
+  step();
+}
+
+function payCharges() {
+  const p = currentPlayer();
+  const charges = getCharges(p);
+  p.capital -= charges;
+  addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> paie <span class="log-amount loss">${fmt(charges)}</span> de charges`);
+  if (!checkWin()) endTurn();
+}
+
+function payTVA(amount) {
+  const p = currentPlayer();
+  p.capital -= amount;
+  G.tvaPot += amount;
+  addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> verse <span class="log-amount loss">${fmt(amount)}</span> au pot TVA (pot : ${fmt(G.tvaPot)})`);
+  endTurn();
+}
+
+function getRefund() {
+  const p = currentPlayer();
+  const amount = G.tvaPot;
+  p.capital += amount;
+  G.tvaPot = 0;
+  addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> encaisse le remboursement TVA : <span class="log-amount gain">+${fmt(amount)}</span>`);
+  if (!checkWin()) endTurn();
+}
+
+function passCV() {
+  addLog(`<span class="log-player" style="color:${currentPlayer().color}">${currentPlayer().name}</span> refuse le recrutement.`);
+  endTurn();
+}
+
+// ── CV ──
+function startCV() {
+  const card = drawCV();
+  G.currentCV = card;
+  showModal(
+    `👤 ${card.role}`,
+    `${card.level} · ${card.contract} · ${card.category}`,
+    `
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;line-height:1.6">
+          <div>Bonus AO : <strong style="color:var(--green)">+${card.bonus} en ${card.category}</strong></div>
+          <div>Charge mensuelle : <strong style="color:${card.cost > 0 ? 'var(--orange)' : 'var(--green)'}">${card.cost > 0 ? fmt(card.cost) + '/tour' : 'Gratuit (usage unique)'}</strong></div>
+          ${card.alternant ? '<div style="color:var(--yellow)">⚠️ Alternant : disponible uniquement sur les cases AO marquées "A"</div>' : ''}
+          ${card.unique ? '<div style="color:var(--blue-light)">♻️ Freelance : retourne dans le paquet après usage</div>' : ''}
+          ${card.special ? `<div style="color:var(--yellow)">✨ ${card.special}</div>` : ''}
+        </div>
+      </div>
+    `,
+    [
+      {label:'✅ Recruter', cls:'btn-primary', fn:'recruitCV()'},
+      {label:'❌ Refuser', cls:'btn-secondary', fn:'refuseCV()'},
+    ]
+  );
+}
+
+function recruitCV() {
+  const p = currentPlayer();
+  p.hand.push(G.currentCV);
+  addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> recrute <strong>${G.currentCV.role}</strong> (${G.currentCV.level} ${G.currentCV.contract})`);
+  closeModal();
+  endTurn();
+}
+
+function refuseCV() {
+  G.cvDeck.unshift(G.currentCV);
+  addLog(`<span class="log-player" style="color:${currentPlayer().color}">${currentPlayer().name}</span> refuse le recrutement.`);
+  closeModal();
+  endTurn();
+}
+
+// ── BRIEF ──
+function startBrief() {
+  const card = drawBrief();
+  G.currentBrief = card;
+  const p = currentPlayer();
+
+  // Show card first, then player rolls
+  showModal(
+    `📩 Brief — ${card.client}`,
+    card.mission,
+    `<div style="font-size:13px;line-height:1.8;margin-bottom:8px">
+      <div>Montant de base : <strong>${fmt(card.base)}</strong></div>
+      <div style="color:var(--green)">Dé = 2 → Bonus +${fmt(card.bonus)}</div>
+      <div style="color:var(--red)">Dé = 5 → Malus -${fmt(card.malus)}</div>
+    </div>
+    <div style="font-size:12px;color:var(--text2)">Lancez le dé pour connaître votre gain !</div>`,
+    [{label:'🎲 Lancer le dé', cls:'btn-primary', fn:'rollBriefDie()'}]
+  );
+}
+
+function rollBriefDie() {
+  const card = G.currentBrief;
+  const p = currentPlayer();
+  closeModal();
+  rollOnCenter(1, `Brief — ${card.client}`, p.name, p.color, ([die]) => {
+    let gain = card.base;
+    let dieResult = '';
+    if (die === 2) { gain += card.bonus; dieResult = `🎯 Bonus +${fmt(card.bonus)} !`; }
+    else if (die === 5) { gain -= card.malus; dieResult = `💀 Malus -${fmt(card.malus)} !`; }
+    else { dieResult = `Montant de base.`; }
+    p.capital += gain;
+    addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> remporte le brief <strong>${card.client}</strong> : <span class="log-amount ${gain >= 0 ? 'gain' : 'loss'}">${gain >= 0 ? '+' : ''}${fmt(gain)}</span>`);
+    setTimeout(() => {
+      showModal(
+        `📩 Brief — ${card.client}`,
+        card.mission,
+        `<div style="font-size:13px;line-height:1.8">
+          <div>Dé : <strong>${die}</strong> — ${dieResult}</div>
+          <div style="font-size:22px;font-family:'Bebas Neue',sans-serif;color:${gain >= 0 ? 'var(--green)' : 'var(--red)'};margin-top:8px">
+            ${gain >= 0 ? '+' : ''}${fmt(gain)}
+          </div>
+          <div style="margin-top:6px;font-size:12px;color:var(--text2)">Trésorerie : ${fmt(p.capital)}</div>
+        </div>`,
+        [{label:'Continuer', cls:'btn-primary', fn:'closeBrief()'}]
+      );
+    }, 800);
+  });
+}
+
+function closeBrief() {
+  closeModal();
+  if (!checkWin()) endTurn();
+}
+
+// ── HASARD ──
+function startHasard() {
+  const card = drawHasard();
+  G.currentHasard = card;
+  const p = currentPlayer();
+  let effectHtml = '';
+  let logText = '';
+
+  if (card.effect === 'gain') {
+    p.capital += card.amount;
+    effectHtml = `<div style="color:var(--green);font-size:18px;font-family:'Bebas Neue',sans-serif">+${fmt(card.amount)}</div>`;
+    logText = `<span class="log-amount gain">+${fmt(card.amount)}</span>`;
+  } else if (card.effect === 'lose') {
+    p.capital -= card.amount;
+    effectHtml = `<div style="color:var(--red);font-size:18px;font-family:'Bebas Neue',sans-serif">-${fmt(card.amount)}</div>`;
+    logText = `<span class="log-amount loss">-${fmt(card.amount)}</span>`;
+  } else if (card.effect === 'skip') {
+    p.skipsNext = true;
+    effectHtml = `<div style="color:var(--yellow)">Vous passerez votre prochain tour.</div>`;
+    logText = `passe son prochain tour`;
+  } else if (card.effect === 'brief') {
+    effectHtml = `<div style="color:var(--blue-light)">Tirez une carte Brief !</div>`;
+  } else if (card.effect === 'cannes') {
+    const activePlayers = G.players.filter(p => !p.bankrupt);
+    G.cannesScores = activePlayers.map(pl => ({ player: pl, score: null }));
+    addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> — ${card.title}`);
+    showModal(
+      `🎴 ${card.title}`,
+      card.desc,
+      `<div style="background:var(--bg3);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:40px;margin-bottom:8px">🏆</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px">Chaque agence lance un dé. Le plus haut score gagne <strong style="color:var(--green)">50 000€</strong>.<br>Relance en cas d'égalité.</div>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:4px">
+          ${activePlayers.map(pl => `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--bg);border-radius:5px">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${pl.color};display:inline-block"></span>${pl.name}</span>
+            <span style="font-size:11px;color:var(--text2)">en attente...</span>
+          </div>`).join('')}
+        </div>
+      </div>`,
+      [{label:'🎲 Lancer les dés !', cls:'btn-primary', fn:'startCannesRolls()'}]
+    );
+    return;
+  } else if (card.effect === 'lose_cv') {
+    // Formation : perd un CDI aléatoire et pioche un nouveau CV
+    const cdiIdx = p.hand.findIndex(cv => cv.contract === 'CDI');
+    if (cdiIdx >= 0) {
+      const lost = p.hand.splice(cdiIdx, 1)[0];
+      G.cvDeck.unshift(lost);
+      const newCV = drawCV();
+      p.hand.push(newCV);
+      effectHtml = `<div style="color:var(--yellow)">Votre <strong>${lost.role}</strong> se reforme et part. Vous recrutez un nouveau profil : <strong>${newCV.role}</strong> (${newCV.level} ${newCV.contract}).</div>`;
+      logText = `perd ${lost.role} (Formation) → recrute ${newCV.role}`;
+    } else {
+      effectHtml = `<div style="color:var(--green)">Aucun CDI en poste — personne ne part en formation !</div>`;
+    }
+  } else if (card.effect === 'burnout') {
+    // Priorité : Senior CDI > Junior CDI dans la catégorie
+    const seniorIdx = p.hand.findIndex(cv => cv.category === card.category && cv.contract === 'CDI' && cv.level === 'Senior');
+    const juniorIdx = p.hand.findIndex(cv => cv.category === card.category && cv.contract === 'CDI' && cv.level === 'Junior');
+    const cvIdx = seniorIdx >= 0 ? seniorIdx : juniorIdx;
+    if (cvIdx >= 0) {
+      const lost = p.hand.splice(cvIdx, 1)[0];
+      G.cvDeck.unshift(lost);
+      effectHtml = `<div style="color:var(--red)">Votre <strong>${lost.role}</strong> ${lost.level === 'Senior' ? '(Senior)' : ''} craque et vous quitte.</div>`;
+      logText = `perd son ${lost.level} ${lost.role} (Burn Out)`;
+    } else {
+      effectHtml = `<div style="color:var(--green)">Pas de ${card.category} en CDI — vous êtes épargné !</div>`;
+    }
+  } else if (card.effect === 'gain_from_all') {
+    const total = (G.players.length - 1) * card.amount;
+    G.players.forEach((pl, i) => { if (i !== p.id) pl.capital -= card.amount; });
+    p.capital += total;
+    effectHtml = `<div style="color:var(--green)">Chaque agence vous donne ${fmt(card.amount)} → +${fmt(total)} !</div>`;
+    logText = `encaisse ${fmt(total)} (CRM)`;
+  } else if (card.effect === 'steal') {
+    if (G.players.length > 1) {
+      const targets = G.players.filter((pl, i) => i !== p.id && !pl.bankrupt);
+      const target = targets[Math.floor(Math.random() * targets.length)];
+      const stolen = Math.round(target.capital * 0.1);
+      target.capital -= stolen;
+      p.capital += stolen;
+      effectHtml = `<div style="color:var(--green)">Vous volez 10% de la trésorerie de <strong style="color:${target.color}">${target.name}</strong> : +${fmt(stolen)} !</div>`;
+      logText = `vole ${fmt(stolen)} à ${target.name}`;
+    }
+  } else if (card.effect === 'steal_cv') {
+    const targets = G.players.filter((pl, i) => i !== p.id && !pl.bankrupt && pl.hand.length > 0);
+    if (targets.length === 0) {
+      effectHtml = `<div style="color:var(--text2)">Aucune agence n'a de CV à voler !</div>`;
+      logText = `RH débauche — personne à voler`;
+    } else {
+      G.pendingStealCV = true;
+      effectHtml = `
+        <div style="font-size:13px;margin-bottom:10px;color:var(--text2)">Choisissez un CV à débaucher :</div>
+        ${targets.map(t => `
+          <div style="margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+              <span style="width:8px;height:8px;border-radius:50%;background:${t.color};display:inline-block"></span>
+              <strong style="font-size:12px">${t.name}</strong>
+            </div>
+            ${t.hand.map((cv, ci) => `
+              <button class="btn btn-secondary" style="margin-bottom:4px;font-size:11px;padding:6px 10px;text-align:left;justify-content:flex-start"
+                onclick="stealCV(${t.id},${ci})">
+                ${cv.level} ${cv.contract} — ${cv.role} <span style="color:var(--green)">+${cv.bonus} ${cv.category}</span>
+              </button>
+            `).join('')}
+          </div>
+        `).join('')}
+      `;
+      logText = `utilise RH débauche`;
+    }
+  } else if (card.effect === 'move') {
+    addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> — ${card.title} : Cocaïne !`);
+    showModal(`🎴 ${card.title}`, card.desc,
+      `<div style="font-size:13px;color:var(--text2)">Lancez un dé pour avancer en bonus !</div>`,
+      [{label:'🎲 Lancer le dé bonus', cls:'btn-primary', fn:'rollCocaine()'}]);
+    return;
+  } else {
+    effectHtml = `<div style="color:var(--text2)">Aucun effet spécial.</div>`;
+  }
+
+  if (logText) addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> — ${card.title} : ${logText}`);
+
+  // Cannes Lions gère son propre flow (dés séquentiels), pas de modale ici
+  if (card.effect === 'cannes') return;
+
+  const actions = G.pendingStealCV
+    ? [] // buttons are inline in effectHtml
+    : G.pendingCocaine
+      ? [{label:'Jouer la case', cls:'btn-primary', fn:'closeCocaine()'}]
+      : card.effect === 'brief'
+        ? [{label:'Tirer un Brief', cls:'btn-primary', fn:'hasardBrief()'}]
+        : [{label:'Continuer', cls:'btn-primary', fn:'closeHasard()'}];
+
+  showModal(
+    `🎴 ${card.title}`,
+    card.desc,
+    `<div style="margin-top:8px">${effectHtml}</div>`,
+    actions
+  );
+}
+
+function stealCV(targetId, cvIdx) {
+  const p = currentPlayer();
+  const target = G.players[targetId];
+  if (!target || cvIdx >= target.hand.length) return;
+  const stolen = target.hand.splice(cvIdx, 1)[0];
+  p.hand.push(stolen);
+  G.pendingStealCV = false;
+  addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> débauche <strong>${stolen.role}</strong> chez <span style="color:${target.color}">${target.name}</span>`);
+  closeModal();
+  if (!checkWin()) endTurn();
+}
+
+function rollCocaine() {
+  const p = currentPlayer();
+  closeModal();
+  rollOnCenter(1, 'Cocaïne 🚀', p.name, p.color, ([extra]) => {
+    p.position = (p.position + extra) % BOARD_CELLS.length;
+    const newCell = BOARD_CELLS[p.position];
+    addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> avance de ${extra} case${extra>1?'s':''} → ${newCell.label} (${newCell.day})`);
+    G.pendingCocaine = true;
+    setTimeout(() => {
+      G.phase = 'action';
+      render();
+    }, 800);
+  });
+}
+
+function closeCocaine() {
+  G.pendingCocaine = false;
+  closeModal();
+  // Play the cell the player landed on
+  G.phase = 'action';
+  render();
+}
+
+function hasardBrief() {
+  closeModal();
+  startBrief();
+}
+
+function closeHasard() {
+  closeModal();
+  if (!checkWin()) endTurn();
+}
+
+function startCannesRolls() {
+  closeModal();
+  rollNextCannes();
+}
+
+function rollNextCannes() {
+  const remaining = G.cannesScores.filter(s => s.score === null);
+  if (remaining.length === 0) { resolveCannes(); return; }
+  const entry = remaining[0];
+  const p = entry.player;
+  rollOnCenter(1, '🏆 Cannes Lions', p.name, p.color, ([die]) => {
+    entry.score = die;
+    setTimeout(() => rollNextCannes(), 800);
+  });
+}
+
+function resolveCannes() {
+  const amount = 50000;
+  const max = Math.max(...G.cannesScores.map(s => s.score));
+  const tied = G.cannesScores.filter(s => s.score === max);
+  if (tied.length > 1) {
+    // Relance entre les égaux
+    G.cannesScores = tied.map(s => ({ player: s.player, score: null }));
+    rollNextCannes();
+    return;
+  }
+  const winner = tied[0].player;
+  winner.capital += amount;
+  addLog(`<span class="log-player" style="color:${winner.color}">${winner.name}</span> remporte les Cannes Lions : <span class="log-amount gain">+${fmt(amount)}</span>`);
+  showModal('🏆 Cannes Lions !', 'Résultats',
+    `<div style="margin:8px 0">${G.cannesScores.map(s => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;${s.player.id===winner.id?'color:var(--green)':''}">
+        <span style="display:flex;align-items:center;gap:6px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${s.player.color};display:inline-block"></span>
+          ${s.player.name}
+        </span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:22px">${s.score}</span>
+      </div>`).join('')}
+    </div>
+    <div style="text-align:center;font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green);margin-top:8px">
+      🏆 ${winner.name} +${fmt(amount)}
+    </div>`,
+    [{label:'Continuer', cls:'btn-primary', fn:'closeHasard()'}]
+  );
+}
+
+function startAO() {
+  const cell = BOARD_CELLS[currentPlayer().position];
+  const isACase = cell.type === 'ao-a';
+  const card = drawAO();
+  G.currentAO = card;
+  G.currentAOisA = isACase;
+  G.aoCategory = 0;
+  G.aoScores = null;
+  G.aoTiedPlayerIds = null;
+  G.aoFreelanceOptIn = {};
+
+  addLog(`📋 AO : <strong>${card.client}</strong> — ${card.mission} (${fmt(card.gain)})`);
+
+  // One modal per player showing AO card + their options
+  G.aoPreQueue = G.players.filter(p => !p.bankrupt).map(p => p.id);
+  showNextAOPreModal();
+}
+
+function aoCardHTML(card, isA) {
+  return `<div style="background:var(--bg3);border-radius:10px;padding:12px;border:1px solid var(--border)">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--orange);margin-bottom:2px">${card.client}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${card.mission}</div>
+    <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">
+      ${card.cats.map((cat, i) => `
+        <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 6px;background:${i===0?'rgba(232,131,74,0.12)':'var(--bg)'};border-radius:4px">
+          <span style="color:${i===0?'var(--orange)':'var(--text2)'}">${i+1}. ${cat}</span>
+          ${i===0?'<span style="color:var(--orange);font-size:10px">▲ 1ère catégorie</span>':''}
+        </div>`).join('')}
+    </div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--green)">${fmt(card.gain)}</div>
+    ${isA ? '<div style="font-size:10px;color:var(--blue-light);margin-top:2px">✓ Alternants disponibles</div>' : ''}
+  </div>`;
+}
+
+function playerForcesHTML(player, card, isA) {
+  const CATS = ['Stratégie','Graphisme','Conception','Média','Développement'];
+  const cat1 = card.cats[0];
+  return `<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+    ${CATS.map(cat => {
+      let bonus = 0;
+      player.hand.forEach(cv => {
+        if (cv.category === cat && cv.contract !== 'Freelance') {
+          if (cv.alternant && !isA) return;
+          bonus += cv.bonus;
         }
       });
-    </script>
-  </body>
-  </html>
+      if (player.specialisation.category === cat) bonus += player.specialisation.bonus;
+      const isFirst = cat === cat1;
+      const isSpec = player.specialisation.category === cat;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:4px;background:${isFirst?'rgba(232,131,74,0.1)':'var(--bg3)'};border:1px solid ${isFirst?'rgba(232,131,74,0.3)':'transparent'}">
+        <span style="font-size:11px;color:${isFirst?'var(--orange)':'var(--text2)'}">
+          ${cat}${isSpec?' ★':''}
+        </span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${bonus>0?'var(--green)':'var(--text2)'}">+${bonus}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function showNextAOPreModal() {
+  if (!G.aoPreQueue || G.aoPreQueue.length === 0) {
+    runAOCategory();
+    return;
+  }
+  const playerId = G.aoPreQueue.shift();
+  const player = G.players[playerId];
+  const card = G.currentAO;
+  const isA = G.currentAOisA;
+  const cat = card.cats[0];
+
+  // Freelances for this category
+  const freelances = player.hand
+    .map((cv, i) => ({cv, i}))
+    .filter(({cv}) => cv.contract === 'Freelance' && cv.category === cat && !(cv.alternant && !isA));
+
+  // Top secret AO card
+  const ts = player.topSecret;
+  const hasTopSecret = !player.topSecretUsed && (ts.effect === 'win_ao' || ts.effect === 'plus6_ao');
+
+  const freelanceHTML = freelances.length > 0 ? `
+    <div style="margin-bottom:10px">
+      <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px">Freelances disponibles</div>
+      ${freelances.map(({cv, i}) => `
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg3);border-radius:6px;margin-bottom:4px;cursor:pointer;border:1px solid var(--border)">
+          <input type="checkbox" id="fl-${i}" style="accent-color:var(--orange);width:16px;height:16px">
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600">${cv.role}</div>
+            <div style="font-size:11px;color:var(--green)">+${cv.bonus} ${cat} <span style="color:var(--text2)">(usage unique)</span></div>
+          </div>
+        </label>`).join('')}
+    </div>` : '';
+
+  const topSecretHTML = hasTopSecret ? `
+    <div style="margin-bottom:10px">
+      <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px">Carte Top Secret</div>
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(240,192,64,0.08);border-radius:6px;cursor:pointer;border:1px solid rgba(240,192,64,0.3)">
+        <input type="checkbox" id="ts-use-${playerId}" style="accent-color:var(--yellow);width:16px;height:16px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:var(--yellow)">${ts.name}</div>
+          <div style="font-size:11px;color:var(--text2)">${ts.text}</div>
+        </div>
+      </label>
+    </div>` : '';
+
+  const noFreelanceOption = freelances.length === 0 && !hasTopSecret;
+
+  showModal(
+    `📋 AO — ${card.client}`,
+    `<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${player.color};display:inline-block"></span><strong>${player.name}</strong></span>`,
+    `<div style="display:flex;gap:12px">
+      <!-- AO Card -->
+      <div style="flex:1">${aoCardHTML(card, isA)}</div>
+      <!-- Player side -->
+      <div style="flex:1">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px">Mes forces</div>
+        ${playerForcesHTML(player, card, isA)}
+        ${freelanceHTML}
+        ${topSecretHTML}
+        ${noFreelanceOption ? `<div style="font-size:12px;color:var(--text2);font-style:italic">Pas de freelance disponible pour cet AO.</div>` : ''}
+      </div>
+    </div>`,
+    [{label:'Confirmer et continuer', cls:'btn-primary', fn:`confirmAOPre(${playerId}, [${freelances.map(f=>f.i).join(',')}])`}]
+  );
+}
+
+function confirmAOPre(playerId, cvIndices) {
+  const player = G.players[playerId];
+  const card = G.currentAO;
+
+  // Freelances
+  const checked = cvIndices.filter(i => {
+    const el = document.getElementById(`fl-${i}`);
+    return el && el.checked;
+  });
+  G.aoFreelanceOptIn[playerId] = new Set(checked);
+
+  // Top secret
+  const tsEl = document.getElementById(`ts-use-${playerId}`);
+  if (tsEl && tsEl.checked) {
+    player.topSecretUsed = true;
+    const ts = player.topSecret;
+    if (ts.effect === 'win_ao') {
+      player.potDeBvin = true;
+      addLog(`<span class="log-player" style="color:${player.color}">${player.name}</span> utilise <strong>Pot-de-vin</strong> !`);
+    } else if (ts.effect === 'plus6_ao') {
+      player.plus6AO = true;
+      addLog(`<span class="log-player" style="color:${player.color}">${player.name}</span> utilise <strong>Le meilleur freelance</strong> — +6 !`);
+    }
+  }
+
+  closeModal();
+  showNextAOPreModal();
+}
+
+// Keep old functions as stubs for safety
+function askNextTopSecret() { showNextAOPreModal(); }
+function askNextFreelance() { runAOCategory(); }
+function useTopSecretForAO(playerId) { confirmAOPre(playerId, []); }
+function confirmFreelance(playerId, cvIndices) { confirmAOPre(playerId, cvIndices); }
+
+function runAOCategory() {
+  const card = G.currentAO;
+  const isA = G.currentAOisA;
+  const catIdx = G.aoCategory;
+  const cat = card.cats[catIdx];
+
+  // Pot-de-vin : victoire automatique
+  const potWinner = G.players.find(p => p.potDeBvin && !p.bankrupt);
+  if (potWinner) {
+    potWinner.potDeBvin = false;
+    potWinner.capital += card.gain;
+    addLog(`<span class="log-player" style="color:${potWinner.color}">${potWinner.name}</span> remporte l'AO <strong>${card.client}</strong> grâce au Pot-de-vin : <span class="log-amount gain">+${fmt(card.gain)}</span>`);
+    showModal(`📋 AO — ${card.client}`, card.mission,
+      `<div style="text-align:center;padding:16px 0">
+        <div style="font-size:14px;color:var(--text2);margin-bottom:8px">🤫 Pot-de-vin activé</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--green)">🏆 ${potWinner.name}<br>+${fmt(card.gain)}</div>
+      </div>`,
+      [{label:'Continuer', cls:'btn-primary', fn:'closeAO()'}]);
+    return;
+  }
+
+  const activePlayers = (G.aoTiedPlayerIds
+    ? G.players.filter(p => G.aoTiedPlayerIds.includes(p.id))
+    : G.players
+  ).filter(p => !p.bankrupt);
+
+  // Roll each player sequentially on center, collect scores, then show results
+  G.aoRollQueue = activePlayers.map(p => ({ player: p, die: null, cvBonus: 0, extra: 0, total: 0 }));
+  G.aoRollCat = cat;
+  G.aoRollIsA = isA;
+  closeModal();
+  rollNextAOPlayer();
+}
+
+function rollNextAOPlayer() {
+  const remaining = G.aoRollQueue.filter(s => s.die === null);
+  if (remaining.length === 0) {
+    // All rolled — compute and show results
+    resolveAOScores();
+    return;
+  }
+  const entry = remaining[0];
+  const p = entry.player;
+  const cat = G.aoRollCat;
+  const cvBonus = getCVBonus(p, cat, G.aoRollIsA);
+  const extra = p.plus6AO ? 6 : 0;
+
+  showModal(
+    `📋 AO — ${G.currentAO.client}`,
+    `<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${p.color};display:inline-block"></span><strong>${p.name}</strong> — Catégorie : <strong>${cat}</strong></span>`,
+    `<div style="font-size:13px;color:var(--text2);margin-bottom:8px">
+      CV pertinents : <strong style="color:var(--green)">+${cvBonus}</strong>
+      ${extra ? `&nbsp;|&nbsp; Le meilleur freelance : <strong style="color:var(--yellow)">+${extra}</strong>` : ''}
+      ${p.specialisation.category === cat ? `&nbsp;|&nbsp; Spécialisation : <strong style="color:var(--blue-light)">+${p.specialisation.bonus}</strong>` : ''}
+    </div>`,
+    [{label:`🎲 Lancer le dé — ${p.name}`, cls:'btn-primary', fn:`rollAODie(${p.id})`}]
+  );
+}
+
+function rollAODie(playerId) {
+  const entry = G.aoRollQueue.find(s => s.player.id === playerId);
+  const p = entry.player;
+  const cat = G.aoRollCat;
+  const cvBonus = getCVBonus(p, cat, G.aoRollIsA);
+  const extra = p.plus6AO ? 6 : 0;
+  if (p.plus6AO) p.plus6AO = false;
+
+  closeModal();
+  rollOnCenter(1, `AO — ${cat}`, p.name, p.color, ([die]) => {
+    entry.die = die;
+    entry.cvBonus = cvBonus;
+    entry.extra = extra;
+    entry.total = die + cvBonus + extra;
+    setTimeout(() => rollNextAOPlayer(), 800);
+  });
+}
+
+function resolveAOScores() {
+  const card = G.currentAO;
+  const cat = G.aoRollCat;
+  const scores = G.aoRollQueue;
+
+  const allScores = G.players.filter(p => !p.bankrupt).map(p => {
+    const s = scores.find(s => s.player.id === p.id);
+    return s || { player: p, die: '-', cvBonus: '-', extra: 0, total: '-', eliminated: true };
+  });
+
+  const max = Math.max(...scores.map(s => s.total));
+  const winners = scores.filter(s => s.total === max);
+
+  if (winners.length === 1) {
+    G.aoTiedPlayerIds = null;
+    const winner = winners[0].player;
+    winner.capital += card.gain;
+    addLog(`<span class="log-player" style="color:${winner.color}">${winner.name}</span> remporte l'AO <strong>${card.client}</strong> : <span class="log-amount gain">+${fmt(card.gain)}</span>`);
+    showModal(
+      `📋 AO — ${card.client}`, card.mission,
+      `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text2);margin-bottom:8px">Catégorie : <strong style="color:white">${cat}</strong></div>
+        <div class="ao-scores">
+          ${allScores.sort((a,b) => (b.total==='-'?-1:b.total)-(a.total==='-'?-1:a.total)).map(s => `
+            <div class="ao-score-row ${s.player.id===winner.id?'winner':''}" style="${s.eliminated?'opacity:0.35':''}">
+              <span style="display:flex;align-items:center;gap:6px">
+                <span style="width:8px;height:8px;border-radius:50%;background:${s.player.color};display:inline-block"></span>
+                ${s.player.name}${s.eliminated?' <span style="font-size:10px">(éliminé)</span>':''}
+              </span>
+              <span style="font-size:11px;color:var(--text2)">${s.eliminated?'—':`dé ${s.die} + CV ${s.cvBonus}${s.extra?` + ⚡${s.extra}`:''}`}</span>
+              <span class="ao-score-val">${s.eliminated?'—':s.total}</span>
+            </div>`).join('')}
+        </div>
+        <div style="margin-top:12px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green)">
+          🏆 ${winner.name} gagne ${fmt(card.gain)} !
+        </div>`,
+      [{label:'Continuer', cls:'btn-primary', fn:'closeAO()'}]
+    );
+  } else if (G.aoCategory < card.cats.length - 1) {
+    G.aoCategory++;
+    G.aoTiedPlayerIds = winners.map(w => w.player.id);
+    const tiedNames = winners.map(w => w.player.name).join(', ');
+    addLog(`Égalité entre ${tiedNames} → catégorie suivante : ${card.cats[G.aoCategory]}`);
+    showModal(
+      `⚖️ Égalité !`, `Catégorie suivante : ${card.cats[G.aoCategory]}`,
+      `<div class="ao-scores">
+          ${allScores.sort((a,b) => (b.total==='-'?-1:b.total)-(a.total==='-'?-1:a.total)).map(s => `
+            <div class="ao-score-row ${winners.find(w=>w.player.id===s.player.id)?'winner':''}" style="${s.eliminated?'opacity:0.35':''}">
+              <span style="display:flex;align-items:center;gap:6px">
+                <span style="width:8px;height:8px;border-radius:50%;background:${s.player.color};display:inline-block"></span>
+                ${s.player.name}${s.eliminated?' <span style="font-size:10px">(éliminé)</span>':''}
+              </span>
+              <span class="ao-score-val">${s.eliminated?'—':s.total}</span>
+            </div>`).join('')}
+        </div>
+        <div style="margin-top:8px;font-size:13px;color:var(--text2)">
+          Égalité sur <strong>${cat}</strong>.<br>
+          Seulement <strong>${winners.map(w=>w.player.name).join(' et ')}</strong> passent à <strong>${card.cats[G.aoCategory]}</strong>.
+        </div>`,
+      [{label:`Lancer sur ${card.cats[G.aoCategory]}`, cls:'btn-primary', fn:'runAOCategory()'}]
+    );
+  } else {
+    G.aoTiedPlayerIds = null;
+    addLog(`AO ${card.client} : égalité totale, carte perdue.`);
+    showModal(
+      `😤 Égalité totale`,
+      `Personne ne remporte l'AO ${card.client}.`,
+      `<div style="color:var(--text2);font-size:13px">La carte est défaussée. L'AO est perdu pour tout le monde.</div>`,
+      [{label:'Continuer', cls:'btn-secondary', fn:'closeAO()'}]
+    );
+  }
+}
+
+function closeAO() {
+  removeUsedFreelances();
+  closeModal();
+  if (!checkWin()) endTurn();
+}
+
+// ── TOP SECRET ──
+function useTopSecret() {
+  const p = currentPlayer();
+  if (p.topSecretUsed) return;
+  const ts = p.topSecret;
+
+  showModal(
+    `🔒 ${ts.name}`,
+    ts.desc,
+    `<div style="font-size:13px;color:var(--text2);line-height:1.6">${ts.text}</div>`,
+    [
+      {label:'Utiliser maintenant', cls:'btn-primary', fn:'activateTopSecret()'},
+      {label:'Garder pour plus tard', cls:'btn-secondary', fn:'closeModal()'},
+    ]
+  );
+}
+
+function activateTopSecret() {
+  const p = currentPlayer();
+  const ts = p.topSecret;
+  p.topSecretUsed = true;
+  closeModal();
+
+  if (ts.effect === 'levee') {
+    rollOnCenter(1, '💸 Levée de fonds', p.name, p.color, ([die]) => {
+      const gain = die <= 2 ? 100000 : die <= 4 ? 200000 : 300000;
+      p.capital += gain;
+      addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> utilise <strong>Levée de fonds</strong> : dé ${die} → <span class="log-amount gain">+${fmt(gain)}</span>`);
+      setTimeout(() => {
+        showModal('💸 Levée de fonds !', `Dé : ${die}`,
+          `<div style="font-size:28px;font-family:'Bebas Neue',sans-serif;color:var(--green)">+${fmt(gain)}</div>`,
+          [{label:'Continuer', cls:'btn-primary', fn:'closeModal()'}]);
+        if (!checkWin()) render();
+      }, 800);
+    });
+  } else if (ts.effect === 'rumeur') {
+    const targets = G.players.filter((pl, i) => i !== p.id && !pl.bankrupt);
+    if (targets.length === 0) { render(); return; }
+    // Ask who to target first
+    showModal(
+      '🗞️ Rumeur',
+      'Choisissez votre cible :',
+      `<div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+        ${targets.map(t => `
+          <button class="btn btn-danger" onclick="activateRumeur(${t.id})" style="justify-content:flex-start;gap:8px">
+            <span style="width:10px;height:10px;border-radius:50%;background:${t.color};display:inline-block;flex-shrink:0"></span>
+            ${t.name} — ${fmt(t.capital)}
+          </button>
+        `).join('')}
+      </div>`,
+      [{label:'Annuler', cls:'btn-secondary', fn:'cancelTopSecret()'}]
+    );
+  } else if (ts.effect === 'steal_all_cv') {
+    const stolen = [];
+    G.players.forEach((pl, i) => {
+      if (i !== p.id && !pl.bankrupt) {
+        stolen.push(...pl.hand);
+        pl.hand = [];
+      }
+    });
+    p.hand.push(...stolen);
+    addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> utilise <strong>Best place to work</strong> et vole tous les CVs !`);
+    render();
+  } else if (ts.effect === 'win_ao') {
+    addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> utilise <strong>Pot-de-vin</strong> — gagnera le prochain AO automatiquement.`);
+    p.potDeBvin = true;
+    render();
+  } else if (ts.effect === 'plus6_ao') {
+    addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> utilise <strong>Le meilleur freelance</strong> — +6 partout au prochain AO.`);
+    p.plus6AO = true;
+    render();
+  } else {
+    render();
+  }
+}
+
+function cancelTopSecret() {
+  // Undo used flag and close
+  currentPlayer().topSecretUsed = false;
+  closeModal();
+  render();
+}
+
+function activateRumeur(targetId) {
+  const p = currentPlayer();
+  const target = G.players[targetId];
+  rollOnCenter(1, `🗞️ Rumeur vs ${target.name}`, p.name, p.color, ([die]) => {
+    const loss = die <= 2 ? 100000 : die <= 4 ? 200000 : 300000;
+    target.capital -= loss;
+    addLog(`<span class="log-player" style="color:${p.color}">${p.name}</span> utilise <strong>Rumeur</strong> contre <span style="color:${target.color}">${target.name}</span> : dé ${die} → <span class="log-amount loss">-${fmt(loss)}</span>`);
+    setTimeout(() => {
+      showModal('🗞️ Rumeur !', `${target.name} est visé·e`,
+        `<div style="text-align:center">
+          <div style="font-size:14px;color:var(--text2);margin-bottom:8px">Dé : <strong>${die}</strong></div>
+          <div style="font-size:28px;font-family:'Bebas Neue',sans-serif;color:var(--red)">-${fmt(loss)}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px">Tréso ${target.name} : ${fmt(target.capital)}</div>
+        </div>`,
+        [{label:'Continuer', cls:'btn-secondary', fn:'closeModal()'}]);
+      render();
+    }, 800);
+  });
+}
+
+function flipSpecCard(playerId) {
+  if (!G.specCardFlipped) G.specCardFlipped = {};
+  G.specCardFlipped[playerId] = !G.specCardFlipped[playerId];
+  // Animate only the card element, not full re-render
+  const card = document.getElementById(`spec-card-${playerId}`);
+  if (card) card.classList.toggle('flipped');
+}
+
+function endTurn() {
+  nextPlayer();
+}
+
+// ══════════════════════════════════════════ MODAL ══
+
+function showModal(title, sub, body, actions) {
+  document.getElementById('modal-title').innerHTML = title;
+  document.getElementById('modal-sub').innerHTML = sub;
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-actions').innerHTML = actions.map(a =>
+    `<button class="btn ${a.cls}" onclick="${a.fn}">${a.label}</button>`
+  ).join('');
+  document.getElementById('modal-overlay').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('active');
+}
+
+// ══════════════════════════════════════════ TABS ══
+
+function switchTab(tab) {
+  document.querySelectorAll('.side-tab').forEach((el, i) => {
+    el.classList.toggle('active', ['action','cards','log'][i] === tab);
+  });
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  if (tab === 'cards') renderCardsTab();
+  if (tab === 'log') renderLogTab();
+}
+
+// ══════════════════════════════════════════ SCREENS ══
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function restartGame() {
+  showScreen('setup');
+}
+
+// ══════════════════════════════════════════ HUB NETWORK ══
+
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const hubSocket = new WebSocket(`${wsProtocol}//${window.location.host}`);
+const lobbyByClientId = new Map();
+const lobbyJoinOrder = [];
+let gameStartedFromHub = false;
+let latestActionsByPlayerId = new Map();
+
+function hubSend(payload) {
+  if (hubSocket.readyState === WebSocket.OPEN) {
+    hubSocket.send(JSON.stringify(payload));
+  }
+}
+
+function updateHubRoomUI(data) {
+  document.getElementById('hub-room-code').textContent = data.roomCode;
+  document.getElementById('hub-qr').src = data.qrDataUrl;
+  const linkEl = document.getElementById('hub-join-link');
+  linkEl.href = data.joinUrl;
+  linkEl.textContent = data.joinUrl;
+}
+
+function renderLobbyFromPhones() {
+  const players = lobbyJoinOrder
+    .map((clientId) => lobbyByClientId.get(clientId))
+    .filter(Boolean);
+
+  setupPlayers = players.map((p) => ({
+    firstname: p.firstName,
+    agencyName: generateAgencyName(p.firstName)
+  }));
+  renderSetup();
+
+  const status = players.length >= 2
+    ? `${players.length} joueurs connectés. Le hub peut lancer la partie.`
+    : `Connecte au moins 2 joueurs (${players.length}/2).`;
+  document.getElementById('hub-lobby-status').textContent = status;
+
+  hubSend({
+    type: 'lobby_state',
+    players: players.map((p) => ({ firstName: p.firstName })),
+    gameStarted: gameStartedFromHub
+  });
+}
+
+function computeForcesByCategory(player) {
+  const totals = {};
+  (player.hand || []).forEach((cv) => {
+    if (!cv || !cv.category) return;
+    totals[cv.category] = (totals[cv.category] || 0) + (cv.force || 0);
+  });
+  return totals;
+}
+
+function extractCurrentActions() {
+  const actionArea = document.getElementById('action-area');
+  if (!actionArea) return [];
+  const buttons = Array.from(actionArea.querySelectorAll('button[onclick]'));
+  return buttons.map((btn, idx) => ({
+    id: `a-${idx}`,
+    label: (btn.textContent || 'Action').trim(),
+    expr: btn.getAttribute('onclick')
+  }));
+}
+
+function syncPhonesWithGame() {
+  if (!G || !Array.isArray(G.players) || G.players.length === 0) return;
+
+  const currentPlayerId = G.currentPlayerIdx;
+  latestActionsByPlayerId = new Map();
+  latestActionsByPlayerId.set(currentPlayerId, extractCurrentActions());
+
+  lobbyJoinOrder.forEach((clientId) => {
+    const phone = lobbyByClientId.get(clientId);
+    if (!phone || typeof phone.playerId !== 'number') return;
+    const player = G.players[phone.playerId];
+    if (!player) return;
+
+    const privatePayload = {
+      type: 'private_state',
+      targetClientId: clientId,
+      gameStarted: true,
+      playerId: player.id,
+      playerName: player.name,
+      capital: player.capital,
+      specialisation: player.specialisation,
+      topSecret: player.topSecret,
+      cvs: player.hand || [],
+      forcesByCategory: computeForcesByCategory(player),
+      currentPlayerId,
+      currentPlayerName: G.players[currentPlayerId]?.name || '',
+      actions: phone.playerId === currentPlayerId ? latestActionsByPlayerId.get(currentPlayerId) || [] : []
+    };
+    hubSend(privatePayload);
+  });
+}
+
+function handlePlayerAction(payload) {
+  if (!G || !Array.isArray(G.players)) return;
+  const playerInfo = lobbyByClientId.get(payload.clientId);
+  if (!playerInfo || typeof playerInfo.playerId !== 'number') return;
+  if (playerInfo.playerId !== G.currentPlayerIdx) return;
+
+  const allowed = latestActionsByPlayerId.get(playerInfo.playerId) || [];
+  const chosen = allowed.find((a) => a.expr === payload.expr);
+  if (!chosen) return;
+
+  try {
+    // Expression comes from hub-rendered action buttons.
+    // eslint-disable-next-line no-new-func
+    new Function(chosen.expr)();
+  } catch (error) {
+    addLog(`⚠️ Action distante invalide: ${error.message}`);
+  }
+}
+
+hubSocket.addEventListener('open', () => {
+  hubSend({ type: 'create_room' });
+});
+
+hubSocket.addEventListener('message', (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.type === 'room_created') {
+    updateHubRoomUI(data);
+    return;
+  }
+
+  if (data.type !== 'relay' || !data.payload) return;
+  const payload = data.payload;
+
+  if (payload.type === 'player_register') {
+    if (!lobbyByClientId.has(payload.clientId)) {
+      lobbyJoinOrder.push(payload.clientId);
+    }
+    lobbyByClientId.set(payload.clientId, {
+      clientId: payload.clientId,
+      firstName: payload.firstName || `Joueur ${lobbyJoinOrder.length}`,
+      playerId: null
+    });
+    renderLobbyFromPhones();
+    return;
+  }
+
+  if (payload.type === 'player_action') {
+    handlePlayerAction(payload);
+  }
+});
+
+const _startGame = startGame;
+startGame = function startGameFromPhones() {
+  const players = lobbyJoinOrder
+    .map((clientId) => lobbyByClientId.get(clientId))
+    .filter(Boolean);
+  if (players.length < 2) {
+    alert('Il faut au moins 2 joueurs connectés sur téléphone.');
+    return;
+  }
+
+  setupPlayers = players.map((p) => ({
+    firstname: p.firstName,
+    agencyName: generateAgencyName(p.firstName)
+  }));
+  _startGame();
+
+  players.forEach((p, idx) => {
+    p.playerId = idx;
+    lobbyByClientId.set(p.clientId, p);
+  });
+  gameStartedFromHub = true;
+  syncPhonesWithGame();
+};
+
+const _render = render;
+render = function renderAndSync() {
+  _render();
+  syncPhonesWithGame();
+};
+
+const _restartGame = restartGame;
+restartGame = function restartGameAndLobby() {
+  _restartGame();
+  gameStartedFromHub = false;
+  latestActionsByPlayerId = new Map();
+  lobbyByClientId.forEach((p) => { p.playerId = null; });
+  renderLobbyFromPhones();
+};
+
+// ══════════════════════════════════════════ INIT ══
+
+renderSetup();
+updateObjective();
+</script>
+</body>
+</html>

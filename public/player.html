@@ -3,119 +3,159 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Agence - Player</title>
+    <title>Agence - Joueur</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 2rem;
-      }
-      form {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-      }
-      input {
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-      }
-      pre {
-        background: #f7f7f7;
-        padding: 1rem;
-        margin-top: 1rem;
-      }
+      body { font-family: Arial, sans-serif; margin: 0; background: #101425; color: #e6ebff; }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 18px; }
+      .card { background: #1a2036; border: 1px solid #2a3456; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+      input, button { font: inherit; border-radius: 8px; border: 1px solid #364266; padding: 10px 12px; }
+      input { background: #11172b; color: #fff; }
+      button { background: #e8834a; color: #fff; border: none; cursor: pointer; }
+      button.secondary { background: #334265; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      #actions button { margin: 6px 6px 0 0; }
+      .muted { color: #99a4cc; font-size: 13px; }
+      ul { margin: 8px 0 0 18px; padding: 0; }
     </style>
   </head>
   <body>
-    <h1>Agence - Joueur</h1>
-    <form id="join-form">
-      <label>
-        Code room (4 lettres):
-        <input id="room-code-input" maxlength="4" required />
-      </label>
-      <button type="submit">Rejoindre</button>
-    </form>
-    <p id="status">Non connecte</p>
-    <button id="send-test" type="button">Envoyer un message test</button>
-    <pre id="log"></pre>
+    <div class="wrap">
+      <h1>Agence - Joueur</h1>
+
+      <div class="card">
+        <div class="row">
+          <input id="room" maxlength="4" placeholder="Code room (ABCD)" />
+          <input id="firstname" placeholder="Ton prénom" />
+          <button id="joinBtn">Rejoindre</button>
+        </div>
+        <p class="muted" id="status">Non connecté.</p>
+      </div>
+
+      <div class="card">
+        <h3>Ton profil</h3>
+        <p id="identity">-</p>
+        <p id="capital">Trésorerie: -</p>
+        <p id="turnInfo">Tour en cours: -</p>
+      </div>
+
+      <div class="card">
+        <h3>Forces par catégorie</h3>
+        <ul id="forces"></ul>
+      </div>
+
+      <div class="card">
+        <h3>CVs privés</h3>
+        <ul id="cvs"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Actions disponibles</h3>
+        <div id="actions" class="row"></div>
+      </div>
+    </div>
 
     <script>
-      const joinForm = document.getElementById("join-form");
-      const roomCodeInput = document.getElementById("room-code-input");
-      const statusEl = document.getElementById("status");
-      const sendTestBtn = document.getElementById("send-test");
-      const logEl = document.getElementById("log");
-      const roomFromQuery = new URLSearchParams(window.location.search).get("room");
-
-      if (roomFromQuery) {
-        roomCodeInput.value = roomFromQuery.toUpperCase();
-      }
-
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
-      let joinedRoom = null;
+      const clientId = crypto.randomUUID();
+      const roomFromUrl = new URLSearchParams(window.location.search).get("room");
 
-      function log(message) {
-        const line = `[${new Date().toLocaleTimeString()}] ${message}`;
-        logEl.textContent = `${line}\n${logEl.textContent}`;
+      const roomInput = document.getElementById("room");
+      const firstNameInput = document.getElementById("firstname");
+      const statusEl = document.getElementById("status");
+      const joinBtn = document.getElementById("joinBtn");
+      const identityEl = document.getElementById("identity");
+      const capitalEl = document.getElementById("capital");
+      const turnInfoEl = document.getElementById("turnInfo");
+      const forcesEl = document.getElementById("forces");
+      const cvsEl = document.getElementById("cvs");
+      const actionsEl = document.getElementById("actions");
+
+      roomInput.value = roomFromUrl ? roomFromUrl.toUpperCase() : "";
+      let joined = false;
+
+      function send(payload) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
       }
 
-      joinForm.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const roomCode = roomCodeInput.value.trim().toUpperCase();
-        if (roomCode.length !== 4) {
-          log("Le code room doit contenir 4 lettres.");
+      function joinRoom() {
+        const roomCode = roomInput.value.trim().toUpperCase();
+        const firstName = firstNameInput.value.trim();
+        if (roomCode.length !== 4 || !firstName) {
+          statusEl.textContent = "Code room 4 lettres + prénom requis.";
           return;
         }
-        ws.send(JSON.stringify({ type: "join_room", roomCode }));
-      });
 
-      sendTestBtn.addEventListener("click", () => {
-        if (!joinedRoom) {
-          log("Rejoins une room avant d'envoyer un message.");
-          return;
-        }
-        ws.send(
-          JSON.stringify({
-            type: "player_action",
-            action: "test_ping",
-            at: Date.now()
-          })
-        );
-      });
+        send({ type: "join_room", roomCode });
+        setTimeout(() => {
+          send({ type: "player_register", clientId, firstName });
+        }, 50);
+      }
+
+      joinBtn.addEventListener("click", joinRoom);
+      firstNameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinRoom(); });
 
       ws.addEventListener("open", () => {
-        statusEl.textContent = "Connecte au serveur";
-        if (roomCodeInput.value.length === 4) {
-          ws.send(
-            JSON.stringify({
-              type: "join_room",
-              roomCode: roomCodeInput.value.toUpperCase()
-            })
-          );
-        }
+        statusEl.textContent = "Connecté au serveur.";
+        if (roomInput.value && firstNameInput.value) joinRoom();
       });
 
       ws.addEventListener("message", (event) => {
         const data = JSON.parse(event.data);
 
         if (data.type === "joined_room") {
-          joinedRoom = data.roomCode;
-          statusEl.textContent = `Dans la room ${joinedRoom}`;
-          log(`Room ${joinedRoom} rejointe.`);
-          return;
-        }
-
-        if (data.type === "relay") {
-          log(`Message recu: ${JSON.stringify(data.payload)}`);
+          joined = true;
+          statusEl.textContent = `Connecté à la room ${data.roomCode}. En attente du hub...`;
           return;
         }
 
         if (data.type === "error") {
-          log(`Erreur: ${data.message}`);
+          statusEl.textContent = `Erreur: ${data.message}`;
           return;
         }
 
-        log(`Evenement: ${JSON.stringify(data)}`);
+        if (data.type !== "relay" || !data.payload) return;
+        const payload = data.payload;
+
+        if (payload.type === "lobby_state" && joined) {
+          statusEl.textContent = payload.gameStarted
+            ? "Partie en cours."
+            : `Lobby: ${payload.players.length} joueur(s) connectés.`;
+          return;
+        }
+
+        if (payload.type !== "private_state" || payload.targetClientId !== clientId) return;
+
+        identityEl.textContent = `${payload.playerName} — ${payload.specialisation?.name || "Spécialisation cachée"}`;
+        capitalEl.textContent = `Trésorerie: ${Intl.NumberFormat("fr-FR").format(payload.capital)} €`;
+        turnInfoEl.textContent = `Tour en cours: ${payload.currentPlayerName || "-"}`;
+
+        const forces = Object.entries(payload.forcesByCategory || {});
+        forcesEl.innerHTML = forces.length
+          ? forces.map(([cat, value]) => `<li>${cat}: ${value}</li>`).join("")
+          : "<li>Aucune force active.</li>";
+
+        const cvs = payload.cvs || [];
+        cvsEl.innerHTML = cvs.length
+          ? cvs.map((cv) => `<li>${cv.name || "CV"} — ${cv.category || "?"} (${cv.force || 0})</li>`).join("")
+          : "<li>Aucun CV.</li>";
+
+        actionsEl.innerHTML = "";
+        (payload.actions || []).forEach((action) => {
+          const btn = document.createElement("button");
+          btn.textContent = action.label;
+          btn.addEventListener("click", () => {
+            send({ type: "player_action", clientId, expr: action.expr });
+          });
+          actionsEl.appendChild(btn);
+        });
+        if (!payload.actions || payload.actions.length === 0) {
+          const waitBtn = document.createElement("button");
+          waitBtn.textContent = "En attente de ton tour";
+          waitBtn.className = "secondary";
+          waitBtn.disabled = true;
+          actionsEl.appendChild(waitBtn);
+        }
       });
     </script>
   </body>
