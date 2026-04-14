@@ -2626,12 +2626,32 @@ function startAO() {
   G.aoScores = null;
   G.aoTiedPlayerIds = null;
   G.aoFreelanceOptIn = {};
+  G.aoPreConfirmed = {};
+  G.aoAwaitingWinnerContinue = false;
+  G.aoWinnerId = null;
 
   addLog(`📋 AO : <strong>${card.client}</strong> — ${card.mission} (${fmt(card.gain)})`);
-
-  // One modal per player showing AO card + their options
-  G.aoPreQueue = G.players.filter(p => !p.bankrupt).map(p => p.id);
-  showNextAOPreModal();
+  const activePlayers = G.players.filter(p => !p.bankrupt);
+  activePlayers.forEach((player) => {
+    const cat = card.cats[0];
+    const freelances = player.hand
+      .map((cv, i) => ({ cv, i }))
+      .filter(({ cv }) => cv.contract === 'Freelance' && cv.category === cat && !(cv.alternant && !isACase))
+      .map(({ cv, i }) => ({ idx: i, role: cv.role, category: cv.category, bonus: cv.bonus }));
+    sendPlayerAction(player.id, {
+      id: 'ao-pre-phase',
+      type: 'ao_pre_phase',
+      label: '📋 Préparation AO',
+      aoCard: card,
+      isA: isACase,
+      playerForces: getCVBonus(player, cat, isACase),
+      freelances,
+      topSecret: player.topSecret,
+      topSecretUsed: player.topSecretUsed
+    });
+  });
+  addLog(`📨 AO envoyé aux téléphones : attente des confirmations (${activePlayers.length}).`);
+  syncPhonesWithGame();
 }
 
 function aoCardHTML(card, isA) {
@@ -2676,98 +2696,11 @@ function playerForcesHTML(player, card, isA) {
 }
 
 function showNextAOPreModal() {
-  if (!G.aoPreQueue || G.aoPreQueue.length === 0) {
-    runAOCategory();
-    return;
-  }
-  const playerId = G.aoPreQueue.shift();
-  const player = G.players[playerId];
-  const card = G.currentAO;
-  const isA = G.currentAOisA;
-  const cat = card.cats[0];
-
-  // Freelances for this category
-  const freelances = player.hand
-    .map((cv, i) => ({cv, i}))
-    .filter(({cv}) => cv.contract === 'Freelance' && cv.category === cat && !(cv.alternant && !isA));
-
-  // Top secret AO card
-  const ts = player.topSecret;
-  const hasTopSecret = !player.topSecretUsed && (ts.effect === 'win_ao' || ts.effect === 'plus6_ao');
-
-  const freelanceHTML = freelances.length > 0 ? `
-    <div style="margin-bottom:10px">
-      <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px">Freelances disponibles</div>
-      ${freelances.map(({cv, i}) => `
-        <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg3);border-radius:6px;margin-bottom:4px;cursor:pointer;border:1px solid var(--border)">
-          <input type="checkbox" id="fl-${i}" style="accent-color:var(--orange);width:16px;height:16px">
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600">${cv.role}</div>
-            <div style="font-size:11px;color:var(--green)">+${cv.bonus} ${cat} <span style="color:var(--text2)">(usage unique)</span></div>
-          </div>
-        </label>`).join('')}
-    </div>` : '';
-
-  const topSecretHTML = hasTopSecret ? `
-    <div style="margin-bottom:10px">
-      <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px">Carte Top Secret</div>
-      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(240,192,64,0.08);border-radius:6px;cursor:pointer;border:1px solid rgba(240,192,64,0.3)">
-        <input type="checkbox" id="ts-use-${playerId}" style="accent-color:var(--yellow);width:16px;height:16px">
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:600;color:var(--yellow)">${ts.name}</div>
-          <div style="font-size:11px;color:var(--text2)">${ts.text}</div>
-        </div>
-      </label>
-    </div>` : '';
-
-  const noFreelanceOption = freelances.length === 0 && !hasTopSecret;
-
-  showModal(
-    `📋 AO — ${card.client}`,
-    `<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${player.color};display:inline-block"></span><strong>${player.name}</strong></span>`,
-    `<div style="display:flex;gap:12px">
-      <!-- AO Card -->
-      <div style="flex:1">${aoCardHTML(card, isA)}</div>
-      <!-- Player side -->
-      <div style="flex:1">
-        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px">Mes forces</div>
-        ${playerForcesHTML(player, card, isA)}
-        ${freelanceHTML}
-        ${topSecretHTML}
-        ${noFreelanceOption ? `<div style="font-size:12px;color:var(--text2);font-style:italic">Pas de freelance disponible pour cet AO.</div>` : ''}
-      </div>
-    </div>`,
-    [{label:'Confirmer et continuer', cls:'btn-primary', fn:`confirmAOPre(${playerId}, [${freelances.map(f=>f.i).join(',')}])`}]
-  );
+  // Deprecated: AO pre-phase is now fully phone-driven.
 }
 
 function confirmAOPre(playerId, cvIndices) {
-  const player = G.players[playerId];
-  const card = G.currentAO;
-
-  // Freelances
-  const checked = cvIndices.filter(i => {
-    const el = document.getElementById(`fl-${i}`);
-    return el && el.checked;
-  });
-  G.aoFreelanceOptIn[playerId] = new Set(checked);
-
-  // Top secret
-  const tsEl = document.getElementById(`ts-use-${playerId}`);
-  if (tsEl && tsEl.checked) {
-    player.topSecretUsed = true;
-    const ts = player.topSecret;
-    if (ts.effect === 'win_ao') {
-      player.potDeBvin = true;
-      addLog(`<span class="log-player" style="color:${player.color}">${player.name}</span> utilise <strong>Pot-de-vin</strong> !`);
-    } else if (ts.effect === 'plus6_ao') {
-      player.plus6AO = true;
-      addLog(`<span class="log-player" style="color:${player.color}">${player.name}</span> utilise <strong>Le meilleur freelance</strong> — +6 !`);
-    }
-  }
-
-  closeModal();
-  showNextAOPreModal();
+  // Deprecated: AO pre-phase is now fully phone-driven.
 }
 
 // Keep old functions as stubs for safety
@@ -2802,11 +2735,10 @@ function runAOCategory() {
     : G.players
   ).filter(p => !p.bankrupt);
 
-  // Roll each player sequentially on center, collect scores, then show results
+  // Roll each player sequentially on center, collect scores, then show results.
   G.aoRollQueue = activePlayers.map(p => ({ player: p, die: null, cvBonus: 0, extra: 0, total: 0 }));
   G.aoRollCat = cat;
   G.aoRollIsA = isA;
-  closeModal();
   rollNextAOPlayer();
 }
 
@@ -2823,16 +2755,15 @@ function rollNextAOPlayer() {
   const cvBonus = getCVBonus(p, cat, G.aoRollIsA);
   const extra = p.plus6AO ? 6 : 0;
 
-  showModal(
-    `📋 AO — ${G.currentAO.client}`,
-    `<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${p.color};display:inline-block"></span><strong>${p.name}</strong> — Catégorie : <strong>${cat}</strong></span>`,
-    `<div style="font-size:13px;color:var(--text2);margin-bottom:8px">
-      CV pertinents : <strong style="color:var(--green)">+${cvBonus}</strong>
-      ${extra ? `&nbsp;|&nbsp; Le meilleur freelance : <strong style="color:var(--yellow)">+${extra}</strong>` : ''}
-      ${p.specialisation.category === cat ? `&nbsp;|&nbsp; Spécialisation : <strong style="color:var(--blue-light)">+${p.specialisation.bonus}</strong>` : ''}
-    </div>`,
-    [{label:`🎲 Lancer le dé — ${p.name}`, cls:'btn-primary', fn:`rollAODie(${p.id})`}]
-  );
+  sendPlayerAction(p.id, {
+    id: 'ao-roll-turn',
+    type: 'ao_roll_turn',
+    label: `🎲 AO ${G.currentAO.client} — Lance le dé`,
+    category: cat,
+    cvBonus,
+    extra,
+    playerId: p.id
+  });
 }
 
 function rollAODie(playerId) {
@@ -2870,58 +2801,39 @@ function resolveAOScores() {
     G.aoTiedPlayerIds = null;
     const winner = winners[0].player;
     winner.capital += card.gain;
+    G.aoWinnerId = winner.id;
+    G.aoAwaitingWinnerContinue = true;
     addLog(`<span class="log-player" style="color:${winner.color}">${winner.name}</span> remporte l'AO <strong>${card.client}</strong> : <span class="log-amount gain">+${fmt(card.gain)}</span>`);
-    showModal(
-      `📋 AO — ${card.client}`, card.mission,
-      `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text2);margin-bottom:8px">Catégorie : <strong style="color:white">${cat}</strong></div>
-        <div class="ao-scores">
-          ${allScores.sort((a,b) => (b.total==='-'?-1:b.total)-(a.total==='-'?-1:a.total)).map(s => `
-            <div class="ao-score-row ${s.player.id===winner.id?'winner':''}" style="${s.eliminated?'opacity:0.35':''}">
-              <span style="display:flex;align-items:center;gap:6px">
-                <span style="width:8px;height:8px;border-radius:50%;background:${s.player.color};display:inline-block"></span>
-                ${s.player.name}${s.eliminated?' <span style="font-size:10px">(éliminé)</span>':''}
-              </span>
-              <span style="font-size:11px;color:var(--text2)">${s.eliminated?'—':`dé ${s.die} + CV ${s.cvBonus}${s.extra?` + ⚡${s.extra}`:''}`}</span>
-              <span class="ao-score-val">${s.eliminated?'—':s.total}</span>
-            </div>`).join('')}
-        </div>
-        <div style="margin-top:12px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--green)">
-          🏆 ${winner.name} gagne ${fmt(card.gain)} !
-        </div>`,
-      [{label:'Continuer', cls:'btn-primary', fn:'closeAO()'}]
-    );
+    hubSend({
+      type: 'ao_result',
+      winnerId: winner.id,
+      winnerName: winner.name,
+      gain: card.gain,
+      card
+    });
+    sendPlayerAction(winner.id, {
+      id: 'ao-winner-continue',
+      type: 'ao_winner_continue',
+      label: 'Continuer',
+      action: 'ao_winner_continue'
+    });
   } else if (G.aoCategory < card.cats.length - 1) {
     G.aoCategory++;
     G.aoTiedPlayerIds = winners.map(w => w.player.id);
     const tiedNames = winners.map(w => w.player.name).join(', ');
     addLog(`Égalité entre ${tiedNames} → catégorie suivante : ${card.cats[G.aoCategory]}`);
-    showModal(
-      `⚖️ Égalité !`, `Catégorie suivante : ${card.cats[G.aoCategory]}`,
-      `<div class="ao-scores">
-          ${allScores.sort((a,b) => (b.total==='-'?-1:b.total)-(a.total==='-'?-1:a.total)).map(s => `
-            <div class="ao-score-row ${winners.find(w=>w.player.id===s.player.id)?'winner':''}" style="${s.eliminated?'opacity:0.35':''}">
-              <span style="display:flex;align-items:center;gap:6px">
-                <span style="width:8px;height:8px;border-radius:50%;background:${s.player.color};display:inline-block"></span>
-                ${s.player.name}${s.eliminated?' <span style="font-size:10px">(éliminé)</span>':''}
-              </span>
-              <span class="ao-score-val">${s.eliminated?'—':s.total}</span>
-            </div>`).join('')}
-        </div>
-        <div style="margin-top:8px;font-size:13px;color:var(--text2)">
-          Égalité sur <strong>${cat}</strong>.<br>
-          Seulement <strong>${winners.map(w=>w.player.name).join(' et ')}</strong> passent à <strong>${card.cats[G.aoCategory]}</strong>.
-        </div>`,
-      [{label:`Lancer sur ${card.cats[G.aoCategory]}`, cls:'btn-primary', fn:'runAOCategory()'}]
-    );
+    runAOCategory();
   } else {
     G.aoTiedPlayerIds = null;
     addLog(`AO ${card.client} : égalité totale, carte perdue.`);
-    showModal(
-      `😤 Égalité totale`,
-      `Personne ne remporte l'AO ${card.client}.`,
-      `<div style="color:var(--text2);font-size:13px">La carte est défaussée. L'AO est perdu pour tout le monde.</div>`,
-      [{label:'Continuer', cls:'btn-secondary', fn:'closeAO()'}]
-    );
+    hubSend({
+      type: 'ao_result',
+      winnerId: null,
+      winnerName: null,
+      gain: 0,
+      card
+    });
+    closeAO();
   }
 }
 
@@ -3366,6 +3278,55 @@ function handlePlayerAction(payload) {
 
   if (payload.action === 'startup_ready') {
     completeStartupReady(payload.clientId);
+    return;
+  }
+
+  if (payload.action === 'ao_pre_confirmed') {
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || !G.currentAO) return;
+    const player = G.players[playerInfo.playerId];
+    if (!player) return;
+    const selected = Array.isArray(payload.freelanceIndices) ? payload.freelanceIndices : [];
+    G.aoFreelanceOptIn[player.id] = new Set(selected);
+    G.aoPreConfirmed[player.id] = true;
+
+    if (payload.useTopSecret && !player.topSecretUsed) {
+      const ts = player.topSecret;
+      if (ts.effect === 'win_ao' || ts.effect === 'plus6_ao') {
+        player.topSecretUsed = true;
+        if (ts.effect === 'win_ao') player.potDeBvin = true;
+        if (ts.effect === 'plus6_ao') player.plus6AO = true;
+      }
+    }
+
+    const activePlayers = G.players.filter((p) => !p.bankrupt);
+    const confirmed = activePlayers.filter((p) => G.aoPreConfirmed[p.id]).length;
+    addLog(`AO pré-phase : ${player.name} confirmé (${confirmed}/${activePlayers.length}).`);
+    if (confirmed >= activePlayers.length) {
+      runAOCategory();
+    } else {
+      syncPhonesWithGame();
+    }
+    return;
+  }
+
+  if (payload.action === 'ao_roll') {
+    if (!Array.isArray(G.aoRollQueue)) return;
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo) return;
+    const remaining = G.aoRollQueue.filter((s) => s.die === null);
+    if (!remaining.length) return;
+    if (remaining[0].player.id !== playerInfo.playerId) return;
+    rollAODie(playerInfo.playerId);
+    return;
+  }
+
+  if (payload.action === 'ao_winner_continue') {
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || !G.aoAwaitingWinnerContinue) return;
+    if (playerInfo.playerId !== G.aoWinnerId) return;
+    G.aoAwaitingWinnerContinue = false;
+    closeAO();
     return;
   }
 

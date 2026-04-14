@@ -201,6 +201,14 @@
         <div id="actions"></div>
       </div>
 
+      <div id="aoCard" class="card hidden">
+        <div class="label">AO en cours</div>
+        <div id="aoContent"></div>
+        <button id="aoConfirmBtn" class="hidden" style="margin-top:10px">Confirmer</button>
+        <button id="aoRollBtn" class="hidden" style="margin-top:10px">🎲 Lancer le dé</button>
+        <button id="aoWinnerContinueBtn" class="hidden" style="margin-top:10px">Continuer</button>
+      </div>
+
       <div id="cvsCard" class="card hidden">
         <div class="label">Tes CVs</div>
         <div id="cvs"></div>
@@ -234,6 +242,11 @@
       const startupReadyBtn = document.getElementById("startupReadyBtn");
       const gameCard = document.getElementById("gameCard");
       const actionsCard = document.getElementById("actionsCard");
+      const aoCard = document.getElementById("aoCard");
+      const aoContent = document.getElementById("aoContent");
+      const aoConfirmBtn = document.getElementById("aoConfirmBtn");
+      const aoRollBtn = document.getElementById("aoRollBtn");
+      const aoWinnerContinueBtn = document.getElementById("aoWinnerContinueBtn");
       const cvsCard = document.getElementById("cvsCard");
       const topSecretCard = document.getElementById("topSecretCard");
       const topSecretNameEl = document.getElementById("topSecretName");
@@ -250,8 +263,10 @@
       let joined = false;
       let lastPrivate = null;
       let startupFlicker = null;
-      let pendingRollTurn = false;
       let forcedAction = null;
+      let aoPreState = null;
+      let aoRollState = null;
+      let aoWinnerPending = false;
 
       function fmtEuro(v) {
         return `${Math.round(v / 1000)}k€`;
@@ -345,6 +360,7 @@
         actionsCard.classList.remove("hidden");
         cvsCard.classList.remove("hidden");
         topSecretCard.classList.remove("hidden");
+        aoCard.classList.toggle("hidden", !(aoPreState || aoRollState || aoWinnerPending));
 
         agencyNameEl.textContent = privateState.playerName || "-";
         capitalEl.textContent = fmtEuro(privateState.capital || 0);
@@ -375,11 +391,13 @@
 
         actionsEl.innerHTML = "";
         const actions = [...(privateState.actions || [])];
-        if (forcedAction) {
+        const alreadyHasForced = forcedAction && actions.some((a) =>
+          (a.id && a.id === forcedAction.id)
+          || (a.action && a.action === forcedAction.action)
+          || (a.expr && forcedAction.expr && a.expr === forcedAction.expr)
+        );
+        if (forcedAction && !alreadyHasForced) {
           actions.unshift(forcedAction);
-        }
-        if (pendingRollTurn && privateState.phase === "roll") {
-          actions.unshift({ id: "turn-roll", label: "🎲 Lancer le dé", action: "roll" });
         }
         if (actions.length === 0) {
           const btn = document.createElement("button");
@@ -399,7 +417,6 @@
             }
             btn.addEventListener("click", () => {
               if (action.action === "roll") {
-                pendingRollTurn = false;
                 forcedAction = null;
                 send({ type: "player_action", clientId, action: "roll" });
                 return;
@@ -457,6 +474,23 @@
         send({ type: "player_action", clientId, action: "startup_ready" });
         startupReadyBtn.disabled = true;
       });
+      aoConfirmBtn.addEventListener("click", () => {
+        if (!aoPreState) return;
+        const freelanceIndices = (aoPreState.freelances || [])
+          .filter((f) => document.getElementById(`ao-fl-${f.idx}`)?.checked)
+          .map((f) => f.idx);
+        const useTopSecret = Boolean(document.getElementById("ao-ts-use")?.checked);
+        send({ type: "player_action", clientId, action: "ao_pre_confirmed", freelanceIndices, useTopSecret });
+        aoConfirmBtn.disabled = true;
+      });
+      aoRollBtn.addEventListener("click", () => {
+        send({ type: "player_action", clientId, action: "ao_roll" });
+        aoRollBtn.disabled = true;
+      });
+      aoWinnerContinueBtn.addEventListener("click", () => {
+        send({ type: "player_action", clientId, action: "ao_winner_continue" });
+        aoWinnerContinueBtn.disabled = true;
+      });
 
       ws.addEventListener("open", () => {
         statusEl.textContent = "Connecté au serveur.";
@@ -489,24 +523,82 @@
           startupTitle.textContent = `Dé ${payload.roll} → ${fmtEuro(payload.capital)}`;
           return;
         }
-        if (payload.type === "your_turn" && payload.targetClientId === clientId) {
-          if (payload.action === "roll") {
-            pendingRollTurn = true;
+        if (payload.type === "your_turn" && payload.targetClientId === clientId && payload.actionData) {
+          forcedAction = payload.actionData;
+          if (payload.actionData.type === "ao_pre_phase") {
+            aoPreState = payload.actionData;
+            aoRollState = null;
+            aoWinnerPending = false;
+            const c = aoPreState.aoCard;
+            aoContent.innerHTML = `
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                  <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--orange)">${c.client}</div>
+                  <div class="meta">${c.mission}</div>
+                  <div class="meta" style="margin-top:8px">Catégorie active: <b>${c.cats[0]}</b></div>
+                  <div class="meta">Gain: <b>${fmtEuro(c.gain)}</b></div>
+                </div>
+                <div>
+                  <div class="meta" style="margin-bottom:6px">Freelances disponibles</div>
+                  ${(aoPreState.freelances || []).map((f) => `
+                    <label class="meta" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+                      <input id="ao-fl-${f.idx}" type="checkbox" />
+                      <span>${f.role} (+${f.bonus} ${f.category})</span>
+                    </label>
+                  `).join("") || "<div class='meta'>Aucun freelance.</div>"}
+                  <label class="meta" style="display:flex;gap:6px;align-items:center;margin-top:8px">
+                    <input id="ao-ts-use" type="checkbox" ${aoPreState.topSecretUsed ? "disabled" : ""} />
+                    <span>Top Secret: ${aoPreState.topSecret?.name || "-"}</span>
+                  </label>
+                </div>
+              </div>
+            `;
+            aoConfirmBtn.classList.remove("hidden");
+            aoConfirmBtn.disabled = false;
+            aoRollBtn.classList.add("hidden");
+            aoWinnerContinueBtn.classList.add("hidden");
+          } else if (payload.actionData.type === "ao_roll_turn") {
+            aoRollState = payload.actionData;
+            aoPreState = null;
+            aoWinnerPending = false;
+            aoContent.innerHTML = `<div class="meta">AO ${payload.actionData.category} — bonus CV: <b>+${payload.actionData.cvBonus}</b>${payload.actionData.extra ? `, extra: <b>+${payload.actionData.extra}</b>` : ""}</div>`;
+            aoRollBtn.classList.remove("hidden");
+            aoRollBtn.disabled = false;
+            aoConfirmBtn.classList.add("hidden");
+            aoWinnerContinueBtn.classList.add("hidden");
+          } else if (payload.actionData.type === "ao_winner_continue") {
+            aoWinnerPending = true;
+            aoPreState = null;
+            aoRollState = null;
+            aoContent.innerHTML = `<div class="meta">Tu as gagné l'AO. Clique pour continuer.</div>`;
+            aoWinnerContinueBtn.classList.remove("hidden");
+            aoWinnerContinueBtn.disabled = false;
+            aoConfirmBtn.classList.add("hidden");
+            aoRollBtn.classList.add("hidden");
           }
-          if (payload.actionData) {
-            forcedAction = payload.actionData;
-          }
+          if (lastPrivate) renderGame(lastPrivate);
+          return;
+        }
+        if (payload.type === "ao_result") {
+          aoPreState = null;
+          aoRollState = null;
+          aoWinnerPending = false;
+          aoConfirmBtn.classList.add("hidden");
+          aoRollBtn.classList.add("hidden");
+          aoWinnerContinueBtn.classList.add("hidden");
+          forcedAction = null;
+          aoContent.innerHTML = payload.winnerName
+            ? `<div class="meta">Résultat AO : <b>${payload.winnerName}</b> gagne ${fmtEuro(payload.gain)}.</div>`
+            : `<div class="meta">Résultat AO : égalité totale, aucun gagnant.</div>`;
+          aoCard.classList.remove("hidden");
           if (lastPrivate) renderGame(lastPrivate);
           return;
         }
         if (payload.type !== "private_state" || payload.targetClientId !== clientId) return;
 
         lastPrivate = payload;
-        if (payload.phase !== "roll" || payload.currentPlayerId !== payload.playerId) {
-          pendingRollTurn = false;
-        }
         if (payload.currentPlayerId !== payload.playerId) {
-          forcedAction = null;
+          if (!aoPreState && !aoRollState && !aoWinnerPending) forcedAction = null;
         }
         renderStartup(payload);
         if (!payload.startup?.active) startupCard.classList.add("hidden");
