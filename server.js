@@ -4,7 +4,7 @@ const express = require("express");
 const WebSocket = require("ws");
 const QRCode = require("qrcode");
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = process.env.PORT || 3000;
 const PUBLIC_BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
   ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   : `http://localhost:${PORT}`;
