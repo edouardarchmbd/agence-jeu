@@ -3199,6 +3199,7 @@ function syncPhonesWithGame() {
       type: 'private_state',
       targetClientId: clientId,
       gameStarted: true,
+      phase: G.phase,
       startup: {
         active: startupState.active,
         isDone: Boolean(startupState.doneByPlayerId[phone.playerId]),
@@ -3232,6 +3233,14 @@ function syncPhonesWithGame() {
         : []
     };
     hubSend(privatePayload);
+
+    if (!startupState.active && phone.playerId === currentPlayerId && G.phase === 'roll') {
+      hubSend({
+        type: 'your_turn',
+        targetClientId: clientId,
+        action: 'roll'
+      });
+    }
   });
   updateHubStartupStatus();
 }
@@ -3302,6 +3311,16 @@ function handlePlayerAction(payload) {
 
   if (payload.action === 'startup_ready') {
     completeStartupReady(payload.clientId);
+    return;
+  }
+
+  if (payload.action === 'roll') {
+    if (!G || !Array.isArray(G.players)) return;
+    const playerInfo = lobbyByClientId.get(payload.clientId);
+    if (!playerInfo || typeof playerInfo.playerId !== 'number') return;
+    if (playerInfo.playerId !== G.currentPlayerIdx || startupState.active) return;
+    if (G.phase !== 'roll') return;
+    doRoll();
     return;
   }
 

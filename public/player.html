@@ -249,16 +249,32 @@
       roomInput.value = roomFromUrl ? roomFromUrl.toUpperCase() : "";
       let joined = false;
       let lastPrivate = null;
+      let startupFlicker = null;
+      let pendingRollTurn = false;
 
       function fmtEuro(v) {
         return `${Math.round(v / 1000)}k€`;
       }
 
-      function dieSVG(value, size = 52) {
-        const v = value || "?";
-        return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-label="Dé">
-          <rect x="4" y="4" width="56" height="56" rx="10" fill="#fff" stroke="#d6d6e8" stroke-width="3"/>
-          <text x="32" y="40" text-anchor="middle" font-size="28" font-family="Bebas Neue, sans-serif" fill="#151525">${v}</text>
+      function dieSVG(value, size = 64) {
+        const DOT_POSITIONS = {
+          1: [[28,28]],
+          2: [[14,14],[42,42]],
+          3: [[14,14],[28,28],[42,42]],
+          4: [[14,14],[42,14],[14,42],[42,42]],
+          5: [[14,14],[42,14],[28,28],[14,42],[42,42]],
+          6: [[14,14],[42,14],[14,28],[42,28],[14,42],[42,42]],
+        };
+        const bg = value ? '#2C2C48' : '#1E1E32';
+        const bc = value ? '#E8834A' : '#32324A';
+        const dotColor = value ? '#E8834A' : '#32324A';
+        const dots = value ? DOT_POSITIONS[value].map(([cx,cy]) =>
+          `<circle cx="${cx}" cy="${cy}" r="4.5" fill="${dotColor}"/>`
+        ).join('') : '';
+        return `<svg viewBox="0 0 56 56" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="52" height="52" rx="10" fill="${bg}" stroke="${bc}" stroke-width="2"/>
+          <rect x="4" y="4" width="48" height="18" rx="6" fill="rgba(255,255,255,0.04)"/>
+          ${dots}
         </svg>`;
       }
 
@@ -357,7 +373,10 @@
         `).join("") || "<div class='meta'>Aucun CV.</div>";
 
         actionsEl.innerHTML = "";
-        const actions = privateState.actions || [];
+        const actions = [...(privateState.actions || [])];
+        if (pendingRollTurn && privateState.phase === "roll") {
+          actions.unshift({ id: "turn-roll", label: "🎲 Lancer le dé", action: "roll" });
+        }
         if (actions.length === 0) {
           const btn = document.createElement("button");
           btn.className = "secondary";
@@ -369,6 +388,11 @@
             const btn = document.createElement("button");
             btn.textContent = action.label;
             btn.addEventListener("click", () => {
+              if (action.action === "roll") {
+                pendingRollTurn = false;
+                send({ type: "player_action", clientId, action: "roll" });
+                return;
+              }
               send({ type: "player_action", clientId, expr: action.expr });
             });
             actionsEl.appendChild(btn);
@@ -399,6 +423,16 @@
       });
       startupRollBtn.addEventListener("click", () => {
         if (lastPrivate?.startup?.rollDone || lastPrivate?.startup?.isDone) return;
+        if (startupFlicker) clearInterval(startupFlicker);
+        let ticks = 0;
+        startupFlicker = setInterval(() => {
+          ticks += 1;
+          startupCapitalCard.innerHTML = `<div>${dieSVG(Math.ceil(Math.random() * 6), 64)}</div><div class="meta">Lancement...</div>`;
+          if (ticks > 8) {
+            clearInterval(startupFlicker);
+            startupFlicker = null;
+          }
+        }, 60);
         send({ type: "player_action", clientId, action: "startup_roll_die" });
         startupRollBtn.disabled = true;
       });
@@ -431,13 +465,25 @@
           return;
         }
         if (payload.type === "startup_roll_result" && payload.targetClientId === clientId) {
+          if (startupFlicker) {
+            clearInterval(startupFlicker);
+            startupFlicker = null;
+          }
           startupRollBtn.disabled = true;
           startupTitle.textContent = `Dé ${payload.roll} → ${fmtEuro(payload.capital)}`;
+          return;
+        }
+        if (payload.type === "your_turn" && payload.targetClientId === clientId && payload.action === "roll") {
+          pendingRollTurn = true;
+          if (lastPrivate) renderGame(lastPrivate);
           return;
         }
         if (payload.type !== "private_state" || payload.targetClientId !== clientId) return;
 
         lastPrivate = payload;
+        if (payload.phase !== "roll" || payload.currentPlayerId !== payload.playerId) {
+          pendingRollTurn = false;
+        }
         renderStartup(payload);
         if (!payload.startup?.active) startupCard.classList.add("hidden");
         renderGame(payload);
